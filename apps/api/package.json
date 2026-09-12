@@ -1,1 +1,24 @@
-{"name":"@syntheniq/api","private":true,"type":"module","scripts":{"dev":"tsx src/server.ts"},"dependencies":{"fastify":"latest","@fastify/multipart":"latest","@fastify/cors":"latest"},"devDependencies":{"tsx":"latest","typescript":"latest"}}
+{
+  "name": "@syntheniq/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json && cp src/pipeline/transcribe/whisper_local.py dist/pipeline/transcribe/whisper_local.py",
+    "start": "node dist/server.js",
+    "test": "node --import tsx --test test/*.test.ts",
+    "fixtures": "tsx scripts/gen-fixtures.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.0.3",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
