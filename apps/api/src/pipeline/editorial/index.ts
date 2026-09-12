@@ -165,6 +165,8 @@ export function rankClips({ segments, structure = {}, duration = 0, hasText = tr
     title: makeTitle(c.text, c.start),
     excerpt: c.text.length > 300 ? c.text.slice(0, 300).trimEnd() + '…' : c.text,
     scores: c.scores,
+    heuristicScores: { ...c.scores },
+    decidedBy: 'heuristic' as const,
     total: c.total,
     reasons: c.reasons,
     exported: null,

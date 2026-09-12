@@ -83,6 +83,10 @@ export interface Clip {
   title: string;
   excerpt: string;
   scores: Scores;
+  /** Deterministic heuristic scores — always present as the safety layer. */
+  heuristicScores: Scores;
+  /** Which layer produced `scores`: the LLM editorial pass or the heuristic. */
+  decidedBy: 'heuristic' | 'llm';
   total: number;
   reasons: string[];
   captions?: { file: string | null; events: number };
@@ -106,6 +110,8 @@ export interface AnalysisData {
 
 export interface ProjectMedia {
   filename: string;
+  /** Durable object key when STORAGE_DRIVER=r2. */
+  r2Key?: string;
   originalName?: string;
   bytes?: number;
   mime?: string;
@@ -131,7 +137,7 @@ export interface Project {
   notes: string[];
 }
 
-export type JobStatus = 'running' | 'done' | 'error';
+export type JobStatus = 'queued' | 'running' | 'done' | 'error';
 
 export interface JobPublic {
   id: string;

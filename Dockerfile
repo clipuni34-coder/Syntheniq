@@ -40,4 +40,6 @@ ENV NODE_ENV=production \
 VOLUME /app/data
 EXPOSE 8787
 
+# Default: API + embedded worker (single-node). Scale-out: run API replicas
+# with API_ONLY=1 and this same image as workers via `node dist/worker.js`.
 CMD ["node", "dist/server.js"]

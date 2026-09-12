@@ -6,14 +6,14 @@ import * as jobs from '../lib/jobs.js';
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/jobs/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const job = jobs.getJob(id);
+    const job = await jobs.getJob(id);
     if (!job) return reply.code(404).send({ error: 'Job not found' });
     return job;
   });
 
   app.get('/v1/jobs/:id/events', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const job = jobs.getJob(id);
+    const job = await jobs.getJob(id);
     if (!job) return reply.code(404).send({ error: 'Job not found' });
 
     reply.hijack();

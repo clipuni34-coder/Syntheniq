@@ -1,114 +1,187 @@
-// Syntheniq — in-process job manager with SSE fan-out.
-// The seam where Redis/BullMQ or Cloudflare Queues can later be swapped in.
-import { EventEmitter } from 'node:events';
-import type { JobPublic, JobStatus } from '../types.js';
+// Syntheniq — production job manager.
+//
+// Jobs live in the configured store (Postgres in production), so they
+// survive process restarts. One or more workers claim jobs atomically
+// (see JobStore.claimNext) with leases + heartbeats: if a worker dies,
+// its lease expires and another worker reclaims the orphan.
+//
+// Progress subscriptions poll the store, so SSE works identically whether
+// the job runs in this process or on another worker.
+import type { JobPublic } from '../types.js';
+import { getStore } from './database.js';
 
-interface JobInternal extends JobPublic {
-  emitter: EventEmitter;
+export type JobHandler = (job: JobPublic) => Promise<unknown>;
+
+export async function createJob(
+  type: string,
+  label: string,
+  meta: Record<string, unknown> = {}
+): Promise<JobPublic> {
+  return (await getStore()).enqueue(type, label, meta);
 }
 
-const jobs = new Map<string, JobInternal>();
-const MAX_JOBS = 200;
-
-function publicJob(job: JobInternal): JobPublic {
-  return {
-    id: job.id,
-    type: job.type,
-    label: job.label,
-    status: job.status,
-    progress: job.progress,
-    message: job.message,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    result: job.result,
-    error: job.error,
-    meta: job.meta,
-  };
+export async function getJob(id: string): Promise<JobPublic | null> {
+  return (await getStore()).get(id);
 }
 
-function prune(): void {
-  if (jobs.size <= MAX_JOBS) return;
-  const entries = [...jobs.entries()].sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt));
-  for (let i = 0; i < entries.length - MAX_JOBS; i++) jobs.delete(entries[i][0]);
-}
-
-export function createJob(type: string, label: string, meta: Record<string, unknown> = {}): JobPublic {
-  prune();
-  const now = new Date().toISOString();
-  const id = 'job-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-  const job: JobInternal = {
-    id,
-    type,
-    label,
-    status: 'running' as JobStatus,
-    progress: 0,
-    message: 'Starting…',
-    createdAt: now,
-    updatedAt: now,
-    result: null,
-    error: null,
-    meta,
-    emitter: new EventEmitter(),
-  };
-  job.emitter.setMaxListeners(50);
-  jobs.set(id, job);
-  return publicJob(job);
-}
-
-export function getJob(id: string): JobPublic | null {
-  const job = jobs.get(id);
-  return job ? publicJob(job) : null;
-}
-
-function emit(job: JobInternal): void {
-  job.updatedAt = new Date().toISOString();
-  job.emitter.emit('update', publicJob(job));
-}
-
-export function updateJob(
+export async function updateJob(
   id: string,
   patch: { progress?: number; message?: string; meta?: Record<string, unknown> } = {}
-): JobPublic | null {
-  const job = jobs.get(id);
-  if (!job) return null;
-  if (typeof patch.progress === 'number') {
-    job.progress = Math.max(0, Math.min(100, patch.progress));
-  }
-  if (typeof patch.message === 'string') job.message = patch.message;
-  if (patch.meta && typeof patch.meta === 'object') job.meta = { ...job.meta, ...patch.meta };
-  emit(job);
-  return publicJob(job);
+): Promise<JobPublic | null> {
+  return (await getStore()).update(id, patch);
 }
 
-export function finishJob(id: string, result: Record<string, unknown> = {}): JobPublic | null {
-  const job = jobs.get(id);
-  if (!job) return null;
-  job.status = 'done';
-  job.progress = 100;
-  job.result = result || {};
-  emit(job);
-  return publicJob(job);
+export async function finishJob(id: string, result: Record<string, unknown> = {}): Promise<JobPublic | null> {
+  return (await getStore()).finish(id, result);
 }
 
-export function failJob(id: string, err: unknown): JobPublic | null {
-  const job = jobs.get(id);
-  if (!job) return null;
-  job.status = 'error';
-  job.error = err instanceof Error ? err.message : String(err);
-  job.message = job.error;
-  emit(job);
-  return publicJob(job);
+export async function failJob(id: string, err: unknown): Promise<JobPublic | null> {
+  return (await getStore()).fail(id, err);
 }
 
-export function subscribe(
-  id: string,
-  listener: (job: JobPublic) => void
-): (() => void) | null {
-  const job = jobs.get(id);
-  if (!job) return null;
-  listener(publicJob(job));
-  job.emitter.on('update', listener);
-  return () => {
-    job.emitter.off('update', listener);
+export async function findActiveJob(
+  type: string,
+  projectId: string,
+  clipId?: string
+): Promise<JobPublic | null> {
+  return (await getStore()).findActive(type, projectId, clipId);
+}
+
+// Poll-based subscription: emits the current snapshot immediately, then on
+// every observed change. Works across processes.
+export function subscribe(id: string, listener: (job: JobPublic) => void): () => void {
+  let stopped = false;
+  let lastUpdated = '';
+  const check = async () => {
+    if (stopped) return;
+    try {
+      const job = await getJob(id);
+      if (!job || stopped) return;
+      if (job.updatedAt !== lastUpdated) {
+        lastUpdated = job.updatedAt;
+        listener(job);
+      }
+    } catch {
+      // transient store hiccup — keep polling
+    }
   };
+  void check();
+  const timer = setInterval(check, 500);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
+export interface WorkerOptions {
+  id?: string;
+  handlers: Record<string, JobHandler>;
+  concurrency?: number;
+  pollMs?: number;
+  leaseSec?: number;
+  maxAttempts?: number;
+  onClaim?: (job: JobPublic) => void;
+}
+
+export interface WorkerHandle {
+  id: string;
+  stop(): Promise<void>;
+  stats(): { claimed: number; running: number };
+}
+
+function workerId(): string {
+  return `worker-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function startWorker(opts: WorkerOptions): WorkerHandle {
+  const id = opts.id || workerId();
+  const concurrency = Math.max(1, opts.concurrency || 1);
+  const pollMs = opts.pollMs ?? 1000;
+  const leaseSec = opts.leaseSec ?? 30;
+  const maxAttempts = opts.maxAttempts ?? 3;
+  let stopped = false;
+  let claimed = 0;
+  const inflight = new Set<Promise<unknown>>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const pump = async () => {
+    if (stopped) return;
+    try {
+      const store = await getStore();
+      while (!stopped && inflight.size < concurrency) {
+        const job = await store.claimNext(id, leaseSec, maxAttempts);
+        if (!job) break;
+        claimed++;
+        if (opts.onClaim) {
+          try {
+            opts.onClaim(job);
+          } catch {
+            // ignore listener errors
+          }
+        }
+        const task = runClaimed(store, job, id, leaseSec, opts.handlers).finally(() => {
+          inflight.delete(task);
+        });
+        inflight.add(task);
+      }
+    } catch {
+      // store unavailable — back off and retry
+    }
+    if (!stopped) {
+      timer = setTimeout(pump, pollMs);
+      if (timer.unref) timer.unref();
+    }
+  };
+
+  const stop = async () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    await Promise.allSettled([...inflight]);
+  };
+
+  void pump();
+  return { id, stop, stats: () => ({ claimed, running: inflight.size }) };
+}
+
+async function runClaimed(
+  store: Awaited<ReturnType<typeof getStore>>,
+  job: JobPublic,
+  owner: string,
+  leaseSec: number,
+  handlers: Record<string, JobHandler>
+): Promise<void> {
+  const heartbeat = setInterval(() => {
+    store.renewLease(job.id, owner, leaseSec).catch(() => undefined);
+  }, Math.max(1000, Math.floor((leaseSec * 1000) / 3)));
+  if (heartbeat.unref) heartbeat.unref();
+  try {
+    // Duplicate guard: if an older active job already covers this work,
+    // this claim is redundant — fail fast instead of double-processing.
+    const meta = (job.meta || {}) as Record<string, unknown>;
+    if (typeof meta.projectId === 'string' && (job.type === 'analyze' || job.type === 'export')) {
+      const first = await store.findActive(
+        job.type,
+        meta.projectId,
+        typeof meta.clipId === 'string' ? meta.clipId : undefined
+      );
+      if (first && first.id !== job.id) {
+        await store.fail(job.id, `Superseded: ${job.type} already running as ${first.id}`);
+        return;
+      }
+    }
+    const handler = handlers[job.type];
+    if (!handler) {
+      await store.fail(job.id, `No worker handler for job type "${job.type}"`);
+      return;
+    }
+    await handler(job);
+  } catch (err) {
+    try {
+      await store.fail(job.id, err);
+    } catch {
+      // ignore
+    }
+  } finally {
+    clearInterval(heartbeat);
+  }
 }

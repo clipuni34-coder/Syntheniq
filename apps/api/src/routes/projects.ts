@@ -12,12 +12,12 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/v1/projects', async () => {
-    return { projects: db.listProjects() };
+    return { projects: await db.listProjects() };
   });
 
   app.get('/v1/projects/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const project = db.getProject(id);
+    const project = await db.getProject(id);
     if (!project) return reply.code(404).send({ error: 'Project not found' });
     return project;
   });

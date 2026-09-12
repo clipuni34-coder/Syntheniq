@@ -1,6 +1,6 @@
 // Syntheniq — transcription provider: OpenAI Whisper API.
 import fs from 'node:fs';
-import { OPENAI_API_KEY, OPENAI_MODEL } from '../../config.js';
+import { OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL } from '../../config.js';
 import type { Segment, TranscriptResult, Word } from '../../types.js';
 
 export function isConfigured(): boolean {
@@ -21,7 +21,7 @@ export async function transcribeApi(
   form.append('timestamp_granularities[]', 'word');
   if (language) form.append('language', language);
 
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const res = await fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: form,

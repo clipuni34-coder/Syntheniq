@@ -37,3 +37,25 @@ export const R2 = {
   bucket: process.env.R2_BUCKET || '',
   publicBaseUrl: process.env.R2_PUBLIC_BASE_URL || '',
 };
+export const S3_FORCE_PATH_STYLE =
+  (process.env.S3_FORCE_PATH_STYLE || '').toLowerCase() === '1' ||
+  (process.env.S3_FORCE_PATH_STYLE || '').toLowerCase() === 'true';
+export const R2_PRESIGN_EXPIRES = int('R2_PRESIGN_EXPIRES', 3600);
+
+// --- Persistence (production requires Postgres) ---
+export const DATABASE_URL = process.env.DATABASE_URL || '';
+
+// --- LLM editorial (OpenAI Responses API; heuristic fallback without key) ---
+export const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+export const OPENAI_EDITORIAL_MODEL = process.env.OPENAI_EDITORIAL_MODEL || 'gpt-4o-mini';
+export const OPENAI_TIMEOUT_MS = int('OPENAI_TIMEOUT_MS', 60000);
+export const LLM_TOP_K = int('LLM_TOP_K', 40);
+
+// --- Workers ---
+export const WORKER_CONCURRENCY = int('WORKER_CONCURRENCY', 1);
+export const WORKER_POLL_MS = int('WORKER_POLL_MS', 1000);
+export const JOB_LEASE_SEC = int('JOB_LEASE_SEC', 30);
+export const JOB_MAX_ATTEMPTS = int('JOB_MAX_ATTEMPTS', 3);
+export const API_ONLY =
+  (process.env.API_ONLY || '').toLowerCase() === '1' ||
+  (process.env.API_ONLY || '').toLowerCase() === 'true';

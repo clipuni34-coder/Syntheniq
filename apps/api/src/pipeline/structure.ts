@@ -86,69 +86,109 @@ export async function detectSceneCuts(videoPath: string, threshold = 0.35): Prom
   return cuts.sort((a, b) => a - b);
 }
 
-function readPcm16Mono(wavPath: string): { mono: Float32Array; sampleRate: number } {
-  const buf = fs.readFileSync(wavPath);
-  if (buf.length < 44 || buf.toString('ascii', 0, 4) !== 'RIFF') {
-    throw new Error('Unsupported audio file for energy analysis (expected WAV)');
-  }
-  let channels = 1;
-  let sampleRate = 16000;
-  let bitsPerSample = 16;
-  let dataOffset = -1;
-  let dataSize = 0;
-  let off = 12;
-  while (off + 8 <= buf.length) {
-    const id = buf.toString('ascii', off, off + 4);
-    const size = buf.readUInt32LE(off + 4);
-    if (id === 'fmt ') {
-      channels = buf.readUInt16LE(off + 10);
-      sampleRate = buf.readUInt32LE(off + 12);
-      bitsPerSample = buf.readUInt16LE(off + 22);
-    } else if (id === 'data') {
-      dataOffset = off + 8;
-      dataSize = size;
-      break;
+// Streaming PCM reader: parses the WAV header from the first bytes, then
+// streams the data chunk in fixed windows. Memory stays flat (~a few MB)
+// no matter how long the video is — a 3-hour upload must not OOM the worker.
+function parseWavHeader(wavPath: string): { dataOffset: number; dataSize: number; channels: number; sampleRate: number } {
+  const fd = fs.openSync(wavPath, 'r');
+  try {
+    const head = Buffer.alloc(65536);
+    const n = fs.readSync(fd, head, 0, head.length, 0);
+    const buf = head.subarray(0, n);
+    if (buf.length < 44 || buf.toString('ascii', 0, 4) !== 'RIFF') {
+      throw new Error('Unsupported audio file for energy analysis (expected WAV)');
     }
-    off += 8 + size + (size % 2);
-  }
-  if (dataOffset < 0) throw new Error('WAV data chunk not found');
-  if (bitsPerSample !== 16) throw new Error(`Unsupported bit depth: ${bitsPerSample}`);
-  const totalSamples = Math.floor(dataSize / 2);
-  const frames = Math.floor(totalSamples / channels);
-  const mono = new Float32Array(frames);
-  for (let i = 0; i < frames; i++) {
-    let acc = 0;
-    for (let c = 0; c < channels; c++) {
-      acc += buf.readInt16LE(dataOffset + (i * channels + c) * 2);
+    let channels = 1;
+    let sampleRate = 16000;
+    let bitsPerSample = 16;
+    let dataOffset = -1;
+    let dataSize = 0;
+    let off = 12;
+    while (off + 8 <= buf.length) {
+      const id = buf.toString('ascii', off, off + 4);
+      const size = buf.readUInt32LE(off + 4);
+      if (id === 'fmt ') {
+        channels = buf.readUInt16LE(off + 10);
+        sampleRate = buf.readUInt32LE(off + 12);
+        bitsPerSample = buf.readUInt16LE(off + 22);
+      } else if (id === 'data') {
+        dataOffset = off + 8;
+        dataSize = size;
+        break;
+      }
+      off += 8 + size + (size % 2);
     }
-    mono[i] = acc / channels / 32768;
+    if (dataOffset < 0) throw new Error('WAV data chunk not found');
+    if (bitsPerSample !== 16) throw new Error(`Unsupported bit depth: ${bitsPerSample}`);
+    return { dataOffset, dataSize, channels, sampleRate };
+  } finally {
+    fs.closeSync(fd);
   }
-  return { mono, sampleRate };
 }
 
-export function computeEnergyCurve(
+export async function computeEnergyCurve(
   wavPath: string,
   { windowSeconds = 0.5, maxPoints = 2400 }: { windowSeconds?: number; maxPoints?: number } = {}
-): EnergyPoint[] {
-  const { mono, sampleRate } = readPcm16Mono(wavPath);
+): Promise<EnergyPoint[]> {
+  const { dataOffset, dataSize, channels, sampleRate } = parseWavHeader(wavPath);
+  const frameBytes = channels * 2;
+  const totalFrames = Math.floor(Math.min(dataSize, Math.max(0, fs.statSync(wavPath).size - dataOffset)) / frameBytes);
   const window = Math.max(1, Math.floor(sampleRate * windowSeconds));
+
   const buckets: EnergyPoint[] = [];
-  for (let start = 0; start < mono.length; start += window) {
-    const end = Math.min(mono.length, start + window);
-    let sum = 0;
-    for (let i = start; i < end; i++) sum += mono[i] * mono[i];
-    const rms = Math.sqrt(sum / Math.max(1, end - start));
-    buckets.push({ t: Math.round((start / sampleRate) * 1000) / 1000, rms: Math.round(rms * 1000) / 1000 });
-  }
+  let frame = 0; // absolute frame index into the PCM stream
+  let sum = 0; // sum of squared mono samples in the open window
+  let winStart = 0; // absolute frame index where the open window started
+  let winCount = 0;
+  let carry = Buffer.alloc(0);
+
+  const flushWindow = () => {
+    const rms = Math.sqrt(sum / Math.max(1, winCount));
+    buckets.push({
+      t: Math.round((winStart / sampleRate) * 1000) / 1000,
+      rms: Math.round(rms * 1000) / 1000,
+    });
+  };
+
+  await new Promise<void>((resolve, reject) => {
+    const stream = fs.createReadStream(wavPath, { start: dataOffset });
+    stream.on('error', reject);
+    stream.on('data', (chunk: Buffer | string) => {
+      const buf = Buffer.concat([carry, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+      const usable = buf.length - (buf.length % frameBytes);
+      carry = buf.subarray(usable);
+      for (let off = 0; off < usable && frame < totalFrames; off += frameBytes, frame++) {
+        let acc = 0;
+        for (let c = 0; c < channels; c++) acc += buf.readInt16LE(off + c * 2);
+        const mono = acc / channels / 32768;
+        sum += mono * mono;
+        winCount++;
+        if (winCount >= window) {
+          flushWindow();
+          sum = 0;
+          winCount = 0;
+          winStart = frame + 1;
+        }
+      }
+    });
+    stream.on('end', () => {
+      if (winCount > 0) flushWindow();
+      resolve();
+    });
+  });
+
   if (buckets.length <= maxPoints) return buckets;
   const factor = buckets.length / maxPoints;
   const out: EnergyPoint[] = [];
   for (let i = 0; i < maxPoints; i++) {
     const from = Math.floor(i * factor);
     const to = Math.min(buckets.length, Math.floor((i + 1) * factor));
-    let sum = 0;
-    for (let j = from; j < to; j++) sum += buckets[j].rms;
-    out.push({ t: buckets[from].t, rms: Math.round((sum / Math.max(1, to - from)) * 1000) / 1000 });
+    let sumRms = 0;
+    for (let j = from; j < to; j++) sumRms += buckets[j].rms;
+    out.push({
+      t: buckets[from].t,
+      rms: Math.round((sumRms / Math.max(1, to - from)) * 1000) / 1000,
+    });
   }
   return out;
 }
@@ -164,7 +204,7 @@ export async function analyzeStructure(
   ]);
   let energyCurve: EnergyPoint[] = [];
   try {
-    energyCurve = computeEnergyCurve(wavPath);
+    energyCurve = await computeEnergyCurve(wavPath);
   } catch {
     energyCurve = [];
   }

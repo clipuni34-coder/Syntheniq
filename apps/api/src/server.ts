@@ -6,9 +6,26 @@ import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
-import { DATA_DIR, MAX_UPLOAD_MB, PORT, STORAGE_DRIVER, WEB_ORIGIN, WEB_OUT_DIR } from './config.js';
+import {
+  API_ONLY,
+  DATA_DIR,
+  JOB_LEASE_SEC,
+  JOB_MAX_ATTEMPTS,
+  MAX_UPLOAD_MB,
+  PORT,
+  STORAGE_DRIVER,
+  WEB_ORIGIN,
+  WEB_OUT_DIR,
+  WORKER_CONCURRENCY,
+  WORKER_POLL_MS,
+} from './config.js';
 import { ensureDir } from './lib/paths.js';
 import { staticRoot } from './lib/static.js';
+import { assertProductionStores } from './lib/store.js';
+import { closeStore, getStore, storeKind } from './lib/database.js';
+import { startWorker } from './lib/jobs.js';
+import { getStorage } from './storage/index.js';
+import { jobHandlers } from './pipeline/index.js';
 import { projectRoutes } from './routes/projects.js';
 import { uploadRoutes } from './routes/upload.js';
 import { analyzeRoutes } from './routes/analyze.js';
@@ -29,6 +46,10 @@ async function readVersion(): Promise<string> {
 
 export async function buildApp() {
   const app = Fastify({ logger: false });
+
+  // Fail fast on misconfigured persistence/storage instead of half-booting.
+  await getStore();
+  getStorage();
 
   await app.register(cors, { origin: WEB_ORIGIN || true });
   await app.register(multipart, {
@@ -56,7 +77,9 @@ export async function buildApp() {
       ok: true,
       name: 'Syntheniq API',
       version: await readVersion(),
-      storage: STORAGE_DRIVER,
+      store: storeKind(),
+      storage: getStorage().kind,
+      worker: API_ONLY ? 'external' : 'embedded',
       ffmpeg,
       ffprobe,
       transcription: {
@@ -75,6 +98,26 @@ export async function buildApp() {
   await jobRoutes(app);
   await clipRoutes(app);
   await exportRoutes(app);
+
+  // Embedded worker: dev and single-node deployments process jobs in-process.
+  // Scale-out deployments set API_ONLY=1 and run separate workers (see worker.ts).
+  if (!API_ONLY) {
+    const worker = startWorker({
+      handlers: jobHandlers(),
+      concurrency: WORKER_CONCURRENCY,
+      pollMs: WORKER_POLL_MS,
+      leaseSec: JOB_LEASE_SEC,
+      maxAttempts: JOB_MAX_ATTEMPTS,
+    });
+    app.addHook('onClose', async () => {
+      await worker.stop();
+      await closeStore();
+    });
+  } else {
+    app.addHook('onClose', async () => {
+      await closeStore();
+    });
+  }
 
   // Serve the exported web app when it exists (single-command local demo).
   const webIndex = path.join(WEB_OUT_DIR, 'index.html');
@@ -105,29 +148,18 @@ export async function buildApp() {
 }
 
 async function main(): Promise<void> {
+  // Never boot production on the file store or local media.
+  assertProductionStores();
   ensureDir(DATA_DIR);
-  // Jobs are in-process: anything marked "analyzing" at boot is stale from a
-  // previous run. Drop the dead job pointer so the studio shows the honest
-  // "interrupted — retry" state instead of hanging.
-  try {
-    const db = await import('./lib/db.js');
-    let cleared = 0;
-    for (const p of db.listProjects()) {
-      if (p.status === 'analyzing') {
-        await db.updateProject(p.id, { activeJob: null });
-        cleared++;
-      }
-    }
-    if (cleared) console.log(`[syntheniq] cleared ${cleared} stale analyzing flag(s)`);
-  } catch (err) {
-    console.error('[syntheniq] boot cleanup failed', err);
-  }
+  // Jobs persist in the store now: anything queued/running at boot is picked
+  // up by the worker (leases recover orphaned claims automatically).
   const app = await buildApp();
   const { OPENAI_API_KEY } = await import('./config.js');
   await app.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`[syntheniq] api listening on http://0.0.0.0:${PORT}`);
   console.log(
-    `[syntheniq] storage=${STORAGE_DRIVER} whisper=${OPENAI_API_KEY ? 'openai-api' : 'local-or-fallback'}`
+    `[syntheniq] store=${storeKind()} storage=${getStorage().kind} worker=${API_ONLY ? 'external' : 'embedded'} ` +
+      `whisper=${OPENAI_API_KEY ? 'openai-api' : 'local-or-fallback'}`
   );
 }
 

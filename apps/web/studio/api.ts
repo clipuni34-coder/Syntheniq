@@ -18,6 +18,10 @@ export interface Clip {
   title: string;
   excerpt: string;
   scores: Scores;
+  /** Deterministic baseline (always present on fresh analyses). */
+  heuristicScores?: Scores;
+  /** Which layer produced `scores`: the LLM editorial pass or the heuristic. */
+  decidedBy?: 'heuristic' | 'llm';
   total: number;
   reasons: string[];
   captions?: { file: string | null; events: number };
@@ -54,7 +58,7 @@ export interface Job {
   id: string;
   type: string;
   label: string;
-  status: 'running' | 'done' | 'error';
+  status: 'queued' | 'running' | 'done' | 'error';
   progress: number;
   message: string;
   result: Record<string, unknown> | null;

@@ -24,5 +24,13 @@ Upload one long video. Syntheniq decides what is worth clipping, why it is worth
 - Emotion/energy: 10%
 - Visual quality: 10%
 
+Two layers produce these scores. The deterministic heuristic always runs
+(free, instant, offline) and every clip keeps its heuristic scores. When an
+OpenAI key is configured, an LLM editor re-scores the top candidates with
+full transcript context plus measured video signals (scene cuts, speech
+ratio, energy variance), with one grounded evidence phrase per dimension.
+Each clip records which layer decided it; any LLM failure keeps the
+heuristic ranking — the editor is an upgrade, never a dependency.
+
 ## Non-negotiable
 The transcript is not the final authority. The video is. If transcript coverage ends before the media duration, the job is incomplete and must be reprocessed.

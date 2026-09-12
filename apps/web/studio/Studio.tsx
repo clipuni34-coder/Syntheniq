@@ -840,6 +840,18 @@ function ClipCard({ projectId, clip }: { projectId: string; clip: Clip }) {
       <div className="clip-main">
         <div className="clip-top">
           <span className="clip-rank">No. {clip.rank}</span>
+          {clip.decidedBy === 'llm' ? (
+            <span className="clip-badge llm" title="Scores set by the LLM editor from full transcript context">
+              LLM editor
+            </span>
+          ) : (
+            <span
+              className="clip-badge"
+              title="Scores from the deterministic heuristic — set OPENAI_API_KEY for the LLM editor"
+            >
+              Heuristic
+            </span>
+          )}
           <h3>{clip.title}</h3>
         </div>
         <div className="clip-time">
