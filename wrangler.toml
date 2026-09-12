@@ -1,0 +1,30 @@
+# Syntheniq — Cloudflare deployment map.
+#
+# The static studio (apps/web/out) lives on Cloudflare Pages, large media on
+# R2, and the Node + FFmpeg engine on Cloudflare Containers (Workers cannot
+# run FFmpeg/whisper). The API selects R2 via STORAGE_DRIVER=r2 + R2_*
+# secrets (see .env.example and apps/api/src/storage/r2.ts).
+#
+#   npm run build:web
+#   npx wrangler pages deploy ./apps/web/out --project-name syntheniq-web
+#   npx wrangler r2 bucket create syntheniq-media
+#   npx wrangler secret put R2_ACCESS_KEY_ID
+#   ...
+
+name = "syntheniq"
+compatibility_date = "2026-01-01"
+
+# Uncomment when the container service exists:
+# [containers]
+# [[containers.services]]
+# name = "syntheniq-engine"
+# image = "registry.example.com/syntheniq:latest"
+
+# Uncomment when the bucket exists:
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "syntheniq-media"
+
+[vars]
+STORAGE_DRIVER = "r2"
+PUBLIC_WEB_ORIGIN = "https://syntheniq.pages.dev"
