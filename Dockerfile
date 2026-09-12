@@ -37,7 +37,7 @@ ENV NODE_ENV=production \
     SYNTHENIQ_DATA=/app/data \
     WEB_OUT_DIR=/app/web-out
 
-VOLUME /app/data
+VOLUM
 EXPOSE 8787
 
 # Default: API + embedded worker (single-node). Scale-out: run API replicas
