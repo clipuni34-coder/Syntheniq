@@ -1,0 +1,1 @@
+{"name":"syntheniq","private":true,"workspaces":["apps/*","packages/*"],"scripts":{"dev:web":"npm --workspace @syntheniq/web run dev","dev:api":"npm --workspace @syntheniq/api run dev"}}
