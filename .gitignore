@@ -1,0 +1,19 @@
+node_modules
+.next
+data
+.env
+.env.*
+!.env.example
+
+# build output
+apps/api/dist
+apps/web/out
+
+# caches (hyperframes chrome / frame cache / tmp)
+.cache
+
+# regenerable test media (see tools/make_test_video.sh)
+tools/models
+tools/tts
+tools/*.mp4
+tools/*.wav
