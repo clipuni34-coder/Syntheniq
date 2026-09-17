@@ -18,11 +18,28 @@ export PATH="$NODE22:$PATH"
 
 echo "==> heal: static ffmpeg (drawtext build)"
 mkdir -p "$TOOLS/ffmpeg-static"
-if ! "$TOOLS/ffmpeg-static/ffmpeg" -hide_banner -filters 2>/dev/null | grep -q drawtext; then
+# NOTE: don't use `ffmpeg -filters | grep -q` here — under `set -o pipefail`,
+# grep -q exits early, ffmpeg hits SIGPIPE, and the pipeline reports failure
+# even when drawtext is present (false negative → endless re-heal).
+has_drawtext() {
+  local flist
+  flist="$("$TOOLS/ffmpeg-static/ffmpeg" -hide_banner -filters 2>/dev/null || true)"
+  case "$flist" in
+    *drawtext*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+if ! has_drawtext; then
   if [ -x "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg" ]; then
     cp "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg" "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffprobe" "$TOOLS/ffmpeg-static/" 2>/dev/null || true
   fi
-  if ! "$TOOLS/ffmpeg-static/ffmpeg" -hide_banner -filters 2>/dev/null | grep -q drawtext; then
+  if ! has_drawtext; then
+    # no gpl build locally → fetch the BtbN GPL build (drawtext included)
+    if ! [ -f "$TOOLS/btb.tar.xz" ]; then
+      echo "    downloading BtbN gpl ffmpeg (drawtext) ..."
+      curl -sL --max-time 240 -o "$TOOLS/btb.tar.xz" \
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" || true
+    fi
     (cd "$TOOLS" && tar -xf btb.tar.xz 2>/dev/null) || true
     if [ -x "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg" ]; then
       cp "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg" "$TOOLS/ffmpeg-master-latest-linux64-gpl/bin/ffprobe" "$TOOLS/ffmpeg-static/"
@@ -38,6 +55,11 @@ if ! "$TOOLS/ffmpeg-static/ffmpeg" -hide_banner -filters 2>/dev/null | grep -q d
 fi
 export PATH="$TOOLS/ffmpeg-static:$PATH"
 "$TOOLS/ffmpeg-static/ffprobe" -version | head -1
+if has_drawtext; then
+  echo "ffmpeg drawtext: OK"
+else
+  echo "ffmpeg drawtext: MISSING — thumbnails will fail (manual fix: download BtbN linux64-gpl build and copy bins to $TOOLS/ffmpeg-static/)"
+fi
 
 echo "==> heal: chrome shared libs"
 LIBS=$TOOLS/chrome-libs/libs
