@@ -30,7 +30,15 @@
 
 ## Tests (after any rebuild)
 - `node apps/api/test/failover-check.mjs`  → expect 9/9
+- `node apps/api/test/openai-client.mjs`   → expect 14/14 (mocked fetch; locks in the live OpenAI
+  API contract: json_object, lowercase-json input guard, per-model temperature auto-learning)
 - `node apps/api/test/regression.mjs`      → expect 22/22 (cases A-D, real renders ~3.5 min)
+
+## UI visually verified (2026-09-17)
+- All 4 screens checked from real screenshots (docs/ui-*.png): passcode screen, project pipeline
+  view (10 stages + provider badges), clip cards (player, AI title, Download MP4/Thumbnail,
+  per-platform caption cards + Copy). No rendering defects found.
+- All three suites re-run green post reset #17: 9/9 + 14/14 + 22/22.
 
 ## Current good state (2026-09-16, post reset #8 — full chain proven again)
 - RESET #8 recovered from scratch in ~15 min: writers + reapply1-6 + builds + E2E + 31/31 tests

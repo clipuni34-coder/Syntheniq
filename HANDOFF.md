@@ -20,7 +20,7 @@ On top of the original repo (Fastify API + Next.js static web UI):
 5. **A/B hook variants** — heuristic proposes a payoff-led variant; pipeline renders it as `<id>_v1.mp4` + thumb; on-demand variant endpoint also exists (`POST /v1/projects/:id/clips/:clipId/variants`); UI shows a VARIANTS section with download buttons.
 6. **Render/QC hardening** — frozen-composition guard (6× signalstats), audio-silence guard (volumedetect), retry endpoint accepts `done` jobs (re-process).
 7. **UI fixes** (reapply6) — deep links (`/project` → `project.html`), `done()` marks all stages done (no forever-spinners), whisper carry-over hyphen tokens stripped ("-by"→"by").
-8. **Test harnesses** — `test/failover-check.mjs` (expect **9/9**) and `test/regression.mjs` (expect **22/22**, 4 synthetic cases through the real prep→compose→render→qc path, ~4 min).
+8. **Test harnesses** — `test/failover-check.mjs` (expect **9/9**), `test/openai-client.mjs` (expect **14/14**, mocked-fetch contract tests for the OpenAI Responses API: `json_object` format, lowercase-"json" input guard, per-model `temperature` auto-learning, image input, error semantics), and `test/regression.mjs` (expect **22/22**, 4 synthetic cases through the real prep→compose→render→qc path, ~4 min).
 9. **UI screenshot tool** — `tools/ui-shots.mjs` (headless Chrome via CDP; passcode + project page).
 10. **UI** (original repo, verified working) — passcode screen, project page with pipeline stages, clip cards (player + Download MP4 + Thumbnail), meta grid (TikTok/IG/YouTube captions, hashtags, CTA, source range, "Why this edit"), VARIANTS section.
 
@@ -71,6 +71,7 @@ cd apps/api && NODE_ENV=production PORT=8787 SYNTHENIQ_DATA=$PWD/data SYNTHENIQ_
 
 # 5) verify
 node test/failover-check.mjs     # expect: 9/9
+node test/openai-client.mjs      # expect: 14/14 (no network needed — fetch is mocked)
 node test/regression.mjs         # expect: 22/22 (run with ffmpeg-static on PATH)
 ```
 
@@ -85,6 +86,16 @@ curl -s -b /tmp/sq.jar -X POST http://127.0.0.1:8787/v1/projects/$PID/upload -F 
 # done → apps/api/data/$PID/files/ has clip-N.mp4, clip-N_v1.mp4 (variant), thumbs, *_meta.json
 # UI check: node tools/ui-shots.mjs $PID   (screenshots in /tmp/ui-*.png)
 ```
+
+**Verified E2E runs (log-verified, all done):**
+- **OpenAI** (3ac66526, 512s): video/analyze/plan/package all `openai/gpt-5.6-luna`; 2 clips + 2 variants, QC 2/2, 1080×1920+audio. Note: `gpt-5.6-terra` (deep default) returns "no credits" on the test key — run with `AI_MODEL=gpt-5.6-luna`.
+- **Gemini** (d35d90c4, 654s): all stages `gemini/gemini-3.5-flash-lite` (3.8-flash is demand-throttled on that key).
+- **Heuristic** (638d089a + others): full offline path, AI package optional.
+
+**OpenAI client contract (live-verified 2026-09-17, locked in by `test/openai-client.mjs`):**
+Responses API wants `text.format.type = "json_object"` (NOT `"json"`); `gpt-5.6-*` rejects the `temperature` parameter (client auto-learns per-model and retries without it); `json_object` mode requires the literal lowercase word "json" somewhere in the input messages (client appends it when absent).
+
+**UI visually verified (2026-09-17):** passcode screen, project pipeline view (10 stages + provider badges), clip cards (player, AI title, duration/fps, Download MP4/Thumbnail, per-platform caption cards with Copy) all render correctly — see `docs/ui-*.png`.
 
 **Test source video** — if missing, regenerate (~1 min): write ~280 words of a monologue about video editing/retention (mention: workflow, mistake, retention, first sentence, captions, "doubled my watch time", "two things"), then:
 `python3 -m edge_tts --voice en-US-GuyNeural -f monologue.txt --write-media vo.mp3` and mux:
