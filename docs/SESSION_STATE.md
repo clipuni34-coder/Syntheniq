@@ -34,7 +34,20 @@
   API contract: json_object, lowercase-json input guard, per-model temperature auto-learning)
 - `node apps/api/test/regression.mjs`      → expect 22/22 (cases A-D, real renders ~3.5 min)
 
+- E2E 027227bf DONE (1903s) — **LIVE-SERVER run on the deployed build**: all stages openai/gpt-5.6-luna
+  (video 22s, analyze 30s, plan 147s, package 8s); GPT chose 1 clip (full 50s source → 41.4s edit)
+  with rationale shown in UI; QC 1/1; HTTP download endpoints verified (MP4/thumb/meta all 200)
+- RECOVERY HARDENING (post reset #18): serve.sh now (a) auto-downloads BtbN gpl ffmpeg when drawtext
+  build + tarball are gone (tested from fully-clean state, 7s), (b) fixes pipefail SIGPIPE false
+  negative in drawtext check, (c) stale-dist guard: rebuilds when any src file is newer than build
+  output (caught a live incident: reset rolled tree back → heal built stale dist → server ran the
+  pre-fix OpenAI client). reapply1/2/4 got version-drift guards (committed source evolved past the
+  original anchors: jobs.ts stage loop, render.ts watchdog spawn, 2-arg heuristicPackage).
+
 ## UI visually verified (2026-09-17)
+- All 5 screens checked from real screenshots (docs/ui-*.png): passcode, authed home/upload
+  (Drop-a-video card, 512MB MP4/MOV), project pipeline view, clip cards (incl. GPT rationale
+  block above clips), posting package (per-platform captions + Copy).
 - All 4 screens checked from real screenshots (docs/ui-*.png): passcode screen, project pipeline
   view (10 stages + provider badges), clip cards (player, AI title, Download MP4/Thumbnail,
   per-platform caption cards + Copy). No rendering defects found.

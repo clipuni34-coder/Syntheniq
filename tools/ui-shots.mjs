@@ -108,8 +108,13 @@ const setCookie = authRes.headers.get('set-cookie') || '';
 const token = (setCookie.match(/syntheniq_token=([^;]+)/) || [])[1];
 if (!token) throw new Error('no auth token: ' + (await authRes.text()));
 
-// 3. project page (with cookie)
+// 3. home / projects list (with cookie)
 await send('Network.setCookie', { name: 'syntheniq_token', value: token, domain: '127.0.0.1', path: '/' });
+await navigate(BASE + '/');
+await sleep(4000); // project list fetch
+await shot('/tmp/ui-home-projects.png');
+
+// 4. project page (with cookie)
 if (projectId) {
   await navigate(`${BASE}/project?id=${projectId}`);
   await sleep(7000); // job fetch + meta fetch + video preload
