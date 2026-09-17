@@ -33,7 +33,11 @@ bash /home/user/Syntheniq/tools/serve.sh --heal-only  # full restore WITHOUT sta
 
 This single script (~60s) does everything: heals the toolchain (node22, ffmpeg-drawtext,
 chrome libs, faster-whisper, edge-tts), **restores all session work** (writers + reapply1→6),
-installs deps, builds API + web, and re-inits git. Idempotent — safe to run any time.
+installs deps, builds API + web (and rebuilds when source is newer than the build), re-inits
+git. Idempotent — safe to run any time.
+**AI config**: full mode auto-loads `/home/user/syntheniq.env` (OPENAI_API_KEY +
+AI_PROVIDER/AI_MODEL) if present — keys live OUTSIDE the public repo, and the file survives
+resets. Without it the server runs heuristic (offline) mode.
 If `serve.sh` itself was wiped but the `tools/reapply*.py` + `write-session-*.py` scripts
 survive, use the manual recipe below.
 

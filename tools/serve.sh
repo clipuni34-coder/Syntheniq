@@ -113,6 +113,17 @@ if [ "${1:-}" = "--heal-only" ]; then
 fi
 
 echo "==> start server (port 8787)"
+# AI config: keys live OUTSIDE the repo (the repo is public). If /home/user/syntheniq.env
+# exists (OPENAI_API_KEY / GEMINI_API_KEY / XAI_API_KEY + AI_PROVIDER / AI_MODEL), load it.
+AI_ENV=/home/user/syntheniq.env
+if [ -f "$AI_ENV" ]; then
+  set -a
+  . "$AI_ENV"
+  set +a
+  echo "    AI config loaded from $AI_ENV (provider: ${AI_PROVIDER:-auto}, model: ${AI_MODEL:-defaults})"
+else
+  echo "    no $AI_ENV — running heuristic (offline AI) mode"
+fi
 cd "$REPO/apps/api"
 exec env NODE_ENV=production PORT=8787 SYNTHENIQ_DATA="$PWD/data" \
   SYNTHENIQ_PASSWORD="$PASSCODE" \
