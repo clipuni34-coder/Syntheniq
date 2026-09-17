@@ -58,6 +58,11 @@
   1080x1920@30fps, QC 1/1, meta (title/angle/tags/CTA/captions/rationale) + variant in UI
 - regression harness hardened: makeSource() ffprobe-validates cached synthetic sources
   (a truncated src60.mp4 in .cache caused a false case-B failure after reset #7)
+- E2E 3ac66526 DONE (512s) — **OPENAI RUN**: video/analyze/plan/package all via openai/gpt-5.6-luna
+  (gpt-5.6-terra = no credits on this key). GPT: 2 clips, hooks "40 Views After Six Hours" /
+  "Your Captions Are Losing Viewers", archs open-loop + question-investigation, energy-matched music;
+  QC 2/2, 1080x1920@30+audio. openai.ts fixes (live-verified): json_object not json,
+  temperature rejected on gpt-5.6-* (auto-learn + retry), literal lowercase "json" required in input
 - E2E d35d90c4 DONE (654s) — **FULL AI RUN**: video/analyze/plan/package all via
   gemini-3.5-flash-lite (key wired server-side). Gemini hook "I spent 6 hours for 40 views",
   arch consequence-first-explanation, stat graphic at the payoff, variant angle

@@ -5,8 +5,25 @@ const BASE = 'https://api.openai.com/v1';
 /**
  * OpenAI — Responses API (current official API as of 2026-09).
  * POST /v1/responses with `instructions` + `input`, structured output via
- * `text.format = { type: "json" }`. Verified against official docs 2026-09-15.
+ * `text.format = { type: "json_object" }` (verified live 2026-09-17: the API
+ * rejects 'json'; supported values are 'json_object', 'text', 'json_schema').
  */
+/** Models that reject `temperature` (reasoning-family, e.g. gpt-5.6-*). Learned at runtime from the API. */
+const NO_TEMPERATURE = new Set<string>();
+
+async function postResponses(
+  body: Record<string, unknown>,
+  apiKey: string,
+): Promise<{ res: Response; data: any }> {
+  const res = await fetch(`${BASE}/responses`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
 export async function callOpenai(req: LLMRequest, apiKey: string, model: string): Promise<LLMResult> {
   const t0 = Date.now();
 
@@ -19,27 +36,38 @@ export async function callOpenai(req: LLMRequest, apiKey: string, model: string)
   }
   content.push({ type: 'input_text', text: req.input });
 
-  const body: Record<string, unknown> = {
-    model,
-    instructions: req.system,
-    input: [{ role: 'user', content }],
-    temperature: req.temperature ?? 0.3,
-    max_output_tokens: req.maxTokens ?? 8000,
+  const buildBody = (withTemp: boolean): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      model,
+      instructions: req.system,
+      input: [{ role: 'user', content }],
+      max_output_tokens: req.maxTokens ?? 8000,
+    };
+    if (withTemp) body.temperature = req.temperature ?? 0.3;
+    if (req.json) {
+      body.text = { format: { type: 'json_object' } };
+      // The Responses API requires the literal word "json" (lowercase) in the
+      // input messages when using json_object mode — prompts say "JSON".
+      const hasJson = /json/.test(req.input) || /json/.test(req.system);
+      if (!hasJson) content[content.length - 1].text += '\n(Respond in json.)';
+    }
+    return body;
   };
-  if (req.json) body.text = { format: { type: 'json' } };
 
   let res: Response;
+  let data: any;
   try {
-    res = await fetch(`${BASE}/responses`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-    });
+    const first = !NO_TEMPERATURE.has(model);
+    ({ res, data } = await postResponses(buildBody(first), apiKey));
+    // Reasoning-family models reject `temperature` — learn it and retry once.
+    if (!res.ok && first && res.status === 400 && /temperature/i.test(String(data?.error?.message ?? ''))) {
+      NO_TEMPERATURE.add(model);
+      ({ res, data } = await postResponses(buildBody(false), apiKey));
+    }
   } catch (e) {
     throw new AiError(`openai network error: ${(e as Error).message}`, true);
   }
 
-  const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data?.error?.message || `HTTP ${res.status}`;
     const retryable = res.status === 429 || res.status >= 500 || res.status === 408;
