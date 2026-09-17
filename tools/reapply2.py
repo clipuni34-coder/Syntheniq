@@ -225,13 +225,19 @@ function toolEnv(): NodeJS.ProcessEnv {
 """,
 'render: toolEnv self-heal')
 
-patch('apps/api/src/pipeline/render.ts',
-"""        env: { ...process.env, TMPDIR: hfTmp },
+# version-drift guard: render.ts later moved from execFile to a detached
+# spawn (hung-render watchdog) — the toolEnv() line is the stable marker.
+_render = open(os.path.join(ROOT, 'apps/api/src/pipeline/render.ts')).read()
+if 'env: { ...toolEnv(), TMPDIR: hfTmp }' in _render:
+    print('  = render: env uses toolEnv (already applied)')
+else:
+    patch('apps/api/src/pipeline/render.ts',
+    """        env: { ...process.env, TMPDIR: hfTmp },
       },
     );""",
-"""        env: { ...toolEnv(), TMPDIR: hfTmp },
+    """        env: { ...toolEnv(), TMPDIR: hfTmp },
       },
     );""",
-'render: env uses toolEnv')
+    'render: env uses toolEnv')
 
 print('integration patches done')

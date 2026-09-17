@@ -67,20 +67,29 @@ patch('apps/api/src/pipeline/package.ts',
 'package: package angle')
 
 # ── 4. jobs.ts ──────────────────────────────────────────────────────────
-patch('apps/api/src/jobs.ts',
-"""  done(msg: string): void {
+# version-drift guard: the committed jobs.ts evolved past the original patch
+# (done() now also marks every stage done) — the error-clear line is the stable marker.
+def _jobs_clear_patch():
+    patch('apps/api/src/jobs.ts',
+    """  done(msg: string): void {
     this.state.status = 'done';
     this.state.progress = 1;
     if (this.state.stages['complete']) this.state.stages['complete'] = { status: 'done', progress: 1, detail: msg };
     this.log('info', `pipeline ${msg}`);
   }""",
-"""  done(msg: string): void {
+    """  done(msg: string): void {
     this.state.status = 'done';
     this.state.progress = 1;
     this.state.error = undefined; // a retried-to-success must not keep showing the old error
     if (this.state.stages['complete']) this.state.stages['complete'] = { status: 'done', progress: 1, detail: msg };
     this.log('info', `pipeline ${msg}`);
   }""",
-'jobs: done() clears error')
+    'jobs: done() clears error')
+
+_jobs = open(os.path.join(ROOT, 'apps/api/src/jobs.ts')).read()
+if 'this.state.error = undefined;' in _jobs:
+    print('  = jobs: done() clears error (already applied)')
+else:
+    _jobs_clear_patch()
 
 print('core patches done')

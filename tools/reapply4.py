@@ -47,8 +47,15 @@ patch('apps/api/src/ai/heuristic.ts',
 'heuristic: callHeuristic passes signals')
 
 old_pkg = open(os.path.join(ROOT, 'apps/api/src/ai/heuristic.ts')).read()
-start = old_pkg.index('function heuristicPackage(input: { clips: any[]; keyphrases: string[] }) {')
-end = old_pkg.index('function r2(n: number): number {')
+# version-drift guard: the committed heuristic.ts already carries the evolved
+# 2-arg heuristicPackage — splicing would regress it, so skip when present.
+_PKG_CURRENT = 'function heuristicPackage(input: { clips: any[]; keyphrases: string[] }, s: HeuristicSignals) {'
+_pkg_skip = _PKG_CURRENT in old_pkg
+if _pkg_skip:
+    start = end = 0
+else:
+    start = old_pkg.index('function heuristicPackage(input: { clips: any[]; keyphrases: string[] }) {')
+    end = old_pkg.index('function r2(n: number): number {')
 new_pkg = '''/** Words that never make a good hashtag (content filler, pronouns, numbers-as-words). */
 const PKG_STOP = new Set([
   'the','a','an','and','or','but','to','of','in','on','at','by','as','so','with','for','from',
@@ -186,8 +193,11 @@ function heuristicPackage(input: { clips: any[]; keyphrases: string[] }, s: Heur
 }
 
 '''
-open(os.path.join(ROOT, 'apps/api/src/ai/heuristic.ts'), 'w').write(old_pkg[:start] + new_pkg + old_pkg[end:])
-print('  + heuristic: heuristicPackage rewritten (title/angle/hashtags)')
+if _pkg_skip:
+    print('  = heuristic: heuristicPackage already at current signature (skip splice)')
+else:
+    open(os.path.join(ROOT, 'apps/api/src/ai/heuristic.ts'), 'w').write(old_pkg[:start] + new_pkg + old_pkg[end:])
+    print('  + heuristic: heuristicPackage rewritten (title/angle/hashtags)')
 
 # ── render.ts: frozen-composition guard in qcClip ───────────────────────
 patch('apps/api/src/pipeline/render.ts',

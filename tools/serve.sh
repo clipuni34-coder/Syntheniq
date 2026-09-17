@@ -85,14 +85,19 @@ echo "==> restore session work (idempotent — re-writes new files, re-applies p
   python3 tools/reapply6.py >/dev/null && \
   python3 tools/reapply7.py >/dev/null)
 
-echo "==> deps + build (if missing)"
+echo "==> deps + build (if missing or stale)"
 if [ ! -d "$REPO/node_modules" ]; then
   (cd "$REPO" && npm install --no-audit --no-fund >/dev/null)
 fi
-if [ ! -f "$REPO/apps/api/dist/server.js" ]; then
+# rebuild when ANY source file is newer than the build output (stale-dist guard:
+# a reset can roll the tree back, heal builds, then the tree is restored —
+# without this check the server would run the pre-restore code)
+if [ ! -f "$REPO/apps/api/dist/server.js" ] \
+   || [ -n "$(find "$REPO/apps/api/src" -newer "$REPO/apps/api/dist/server.js" -print -quit 2>/dev/null)" ]; then
   (cd "$REPO" && npm run build:api >/dev/null)
 fi
-if [ ! -f "$REPO/apps/web/out/index.html" ]; then
+if [ ! -f "$REPO/apps/web/out/index.html" ] \
+   || [ -n "$(find "$REPO/apps/web" \( -path "$REPO/apps/web/node_modules" -o -path "$REPO/apps/web/out" -o -path "$REPO/apps/web/.next" \) -prune -o -newer "$REPO/apps/web/out/index.html" -print -quit 2>/dev/null)" ]; then
   (cd "$REPO" && npm run build:web >/dev/null)
 fi
 export PATH="$NODE22:$TOOLS/ffmpeg-static:$PATH"
