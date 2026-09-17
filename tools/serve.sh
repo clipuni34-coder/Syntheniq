@@ -60,7 +60,8 @@ echo "==> restore session work (idempotent — re-writes new files, re-applies p
   python3 tools/reapply3.py >/dev/null && \
   python3 tools/reapply4.py >/dev/null && \
   python3 tools/reapply5.py >/dev/null && \
-  python3 tools/reapply6.py >/dev/null)
+  python3 tools/reapply6.py >/dev/null && \
+  python3 tools/reapply7.py >/dev/null)
 
 echo "==> deps + build (if missing)"
 if [ ! -d "$REPO/node_modules" ]; then

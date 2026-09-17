@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { accessSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -69,32 +69,66 @@ export async function renderComposition(
   const hfFrames = path.join(ROOT, '.cache', 'hyperframes-frames');
   await Promise.all([mkdir(hfTmp, { recursive: true }), mkdir(hfFrames, { recursive: true })]).catch(() => {});
   log(`[render] ${path.basename(compDir)}: hyperframes render (${fps}fps, standard, 1 worker)`);
+  const renderArgs = [
+    'render',
+    compDir,
+    '-o',
+    outMp4,
+    '--fps',
+    String(fps),
+    '--quality',
+    'standard',
+    '--workers',
+    '1',
+    '--video-frame-format',
+    'jpg',
+    '--frames-cache-dir',
+    hfFrames,
+  ];
   try {
-    await pexecFile(
-      bin,
-      [
-        'render',
-        compDir,
-        '-o',
-        outMp4,
-        '--fps',
-        String(fps),
-        '--quality',
-        'standard',
-        '--workers',
-        '1',
-        '--video-frame-format',
-        'jpg',
-        '--frames-cache-dir',
-        hfFrames,
-      ],
-      {
+    // Watchdog: hyperframes can HANG with its chrome child dead (swiftshader on
+    // CPU-only boxes). A SIGTERM timeout does not help because the CLI waits on
+    // the dead child — so run in its own process group and SIGKILL the whole
+    // group past the limit. The pipeline's 1 retry then re-renders (proven:
+    // caught a 51-min hang live).
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(bin, renderArgs, {
         cwd: ROOT,
-        timeout: 45 * 60 * 1000,
-        maxBuffer: 64 * 1024 * 1024,
+        detached: true,
         env: { ...toolEnv(), TMPDIR: hfTmp },
-      },
-    );
+      });
+      let tail = '';
+      const pump = (d: Buffer) => {
+        tail += d.toString();
+        if (tail.length > 65536) tail = tail.slice(-65536);
+      };
+      child.stdout?.on('data', pump);
+      child.stderr?.on('data', pump);
+      let settled = false;
+      const watchdog = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try {
+          process.kill(-child.pid!, 'SIGKILL');
+        } catch {
+          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+        }
+        reject({ message: 'render watchdog: killed hung render after 40 min', stderr: '' });
+      }, 40 * 60 * 1000);
+      child.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        reject({ message: err.message, stderr: tail });
+      });
+      child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        if (code === 0) resolve();
+        else reject({ message: `exit code ${code}`, stderr: tail });
+      });
+    });
   } catch (e: any) {
     const tail = String((e as any).stderr || '').split('\n').slice(-12).join(' | ');
     log(`[render] FAILED: ${tail || e.message}`);
