@@ -34,6 +34,16 @@
   API contract: json_object, lowercase-json input guard, per-model temperature auto-learning)
 - `node apps/api/test/regression.mjs`      → expect 22/22 (cases A-D, real renders ~3.5 min)
 
+- CRASH-RESUME E2E (c7bdd1cd): server kill -9'd mid-render → persisted state left 'running'.
+  NEW startup reconcile (server.ts, before listen): orphaned running/cancelling jobs → 'interrupted'
+  with clear error; UI shows "Paused — resume ready"; POST /retry accepted → resumed with
+  audio/transcribe/analyze/plan/prep ALL "reusing persisted (resume)", render restarted.
+  BUGS FIXED: (1) hydrateJob's crash guard misfired on fresh uploads (legit 'running' job got
+  stamped with a ghost error) — guard removed, crash handling centralized at startup;
+  (2) a silently-failed build (npm script run from wrong cwd, grep masked exit code) shipped a
+  stale dist — build now verified by grep of the new symbol in dist.
+  Watchdog fired LIVE again: hung chrome render SIGKILLed at 40 min, auto-retry started (2nd
+  time proven; 2nd attempt hung again on this loaded box — surfaces as clean error after retry).
 - E2E ded3ff0b DONE (540s) — full run on the ONE-COMMAND-restore server (serve.sh full mode
   auto-loads /home/user/syntheniq.env → OpenAI live without any manual env); 2 clips + 2 auto
   variants. **On-demand variant endpoint E2E-verified**: POST /v1/projects/:id/clips/:cid/variants

@@ -21,6 +21,24 @@ iPhone Safari → private passcode-protected URL
   → RESULTS       preview + download (MP4, thumbnail, posting metadata)
 ```
 
+## What you get
+
+- **Maximum useful clips** — the AI picks the most genuinely usable clips (not an
+  arbitrary number), one idea each, in chronological order with strict lip-sync
+  (never reordered, looped, or spliced) and dead-air removed.
+- **A/B hook variants** — 0–2 variants per clip, only when a genuinely different
+  angle exists; each renders as a separate downloadable MP4. On-demand variants
+  with your own hook text: `POST /v1/projects/:id/clips/:clipId/variants`.
+- **Retention-engine editing** — 8 beat-driven architectures (hook → curiosity →
+  micro-payoff → … → satisfaction), kinetic captions with hierarchy, motion cues
+  with purpose/timing/intensity, stat & list graphics, energy-matched music/SFX.
+- **Posting package per clip** — title, angle, TikTok/Instagram/YouTube captions,
+  hashtags, CTA, thumbnail, and the edit rationale.
+- **Resilience** — render watchdog (hung renders are SIGKILLed at 40 min and
+  auto-retried), provider failover with offline heuristic fallback, and crash
+  resume: a job interrupted by a restart is marked and resumes from the last
+  completed stage via retry.
+
 Every intermediate result is persisted per project (`data/projects/<id>/`):
 `job.json` (stage state machine), `audio.wav`, `transcript.json`, `analysis.json`,
 `plan.json`, `media/<clip>/` (segments + mixed audio + `spec.json`),

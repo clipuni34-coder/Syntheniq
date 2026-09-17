@@ -235,4 +235,26 @@ try {
   app.log.warn(`web out dir not found at ${WEB_OUT_DIR} — API only mode`);
 }
 
+// Crash consistency: a job left "running"/"cancelling" by a hard restart is
+// orphaned (no in-memory pipeline). Mark it 'interrupted' so the UI shows the
+// resume state and POST /retry (which accepts 'interrupted') can pick it up
+// from the last persisted stage.
+try {
+  for (const p of await listProjects()) {
+    if (p.status === 'running' || p.status === 'cancelling') {
+      const job = await loadJob(p.id);
+      if (job && (job.status === 'running' || job.status === 'cancelling')) {
+        job.status = 'interrupted';
+        job.error = 'interrupted by server restart — retry resumes from the last completed stage';
+        job.logs.push({ t: new Date().toISOString(), level: 'warn', msg: 'startup: marked interrupted (server restarted mid-run) — POST /retry to resume' });
+        job.logs = job.logs.slice(-400);
+        await saveJob(job);
+        app.log.warn(`startup: ${p.id.slice(0, 8)} was running when the server died — marked interrupted (retry resumes it)`);
+      }
+    }
+  }
+} catch (e) {
+  app.log.warn(`startup reconcile failed: ${(e as Error).message}`);
+}
+
 app.listen({ port: PORT, host: '0.0.0.0' });
