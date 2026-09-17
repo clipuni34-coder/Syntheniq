@@ -115,8 +115,8 @@ curl -s -b /tmp/sq.jar -X POST http://127.0.0.1:8787/v1/projects/$PID/upload -F 
 
 ## Pending (need the user)
 
-1. **GitHub PAT** → push `dev/finish-pipeline` to public repo `clipuni34-coder/Syntheniq` (base repo HEAD was main @ 200f4a0). No force-push, no resets, incremental commits only.
-2. **AI API key** (Gemini/OpenAI/Grok via `AI_PROVIDER`/`AI_MODEL`/key env) → activates the AI editorial path (heuristic path works fully without it).
+1. **GitHub PAT** → push `dev/finish-pipeline` to public repo `clipuni34-coder/Syntheniq` (base repo HEAD was main @ 200f4a0). No force-push, no resets, incremental commits only. — **DONE 2026-09-17: branch pushed (18d6484).**
+2. **AI API key** (Gemini/OpenAI/Grok via `AI_PROVIDER`/`AI_MODEL`/key env) → activates the AI editorial path (heuristic path works fully without it). — **Gemini key received + wired: server runs with `GEMINI_API_KEY=... AI_MODEL=gemini-3.5-flash-lite`.** The packaging stage is proven AI-driven (real Gemini-generated titles/captions/hashtags, "ok in 2s"). Note: `gemini-3.8-flash` (the default deep model) is intermittently quota-throttled on this key ("high demand" 429s) — `gemini-3.5-flash-lite` is reliable; keep `AI_MODEL` set until the deep model settles. If a full AI-planned run is wanted, create a FRESH project (retry resumes from render, so analyze/plan stay heuristic on existing jobs).
 
 ## Git
 
