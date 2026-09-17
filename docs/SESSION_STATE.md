@@ -34,6 +34,12 @@
   API contract: json_object, lowercase-json input guard, per-model temperature auto-learning)
 - `node apps/api/test/regression.mjs`      → expect 22/22 (cases A-D, real renders ~3.5 min)
 
+- E2E ded3ff0b DONE (540s) — full run on the ONE-COMMAND-restore server (serve.sh full mode
+  auto-loads /home/user/syntheniq.env → OpenAI live without any manual env); 2 clips + 2 auto
+  variants. **On-demand variant endpoint E2E-verified**: POST /v1/projects/:id/clips/:cid/variants
+  with custom hookText "Nobody finishes your videos because of ONE habit" → 400 without hook,
+  200 with → clip-1_var1.mp4 + thumb rendered (<60s), downloadable via /files/.
+  **Secrets sweep of public repo: clean** (no API keys/PATs in any tracked file).
 - E2E 027227bf DONE (1903s) — **LIVE-SERVER run on the deployed build**: all stages openai/gpt-5.6-luna
   (video 22s, analyze 30s, plan 147s, package 8s); GPT chose 1 clip (full 50s source → 41.4s edit)
   with rationale shown in UI; QC 1/1; HTTP download endpoints verified (MP4/thumb/meta all 200)
