@@ -58,6 +58,10 @@
   1080x1920@30fps, QC 1/1, meta (title/angle/tags/CTA/captions/rationale) + variant in UI
 - regression harness hardened: makeSource() ffprobe-validates cached synthetic sources
   (a truncated src60.mp4 in .cache caused a false case-B failure after reset #7)
+- E2E d35d90c4 DONE (654s) — **FULL AI RUN**: video/analyze/plan/package all via
+  gemini-3.5-flash-lite (key wired server-side). Gemini hook "I spent 6 hours for 40 views",
+  arch consequence-first-explanation, stat graphic at the payoff, variant angle
+  "Stop starting your videos with intros"; QC 1/1, 1080x1920@30+audio
 - E2E 54ca9028 DONE (600s): 2 clips + 2 VARIANTS (payoff-led hooks), frame-verified A/B hooks
   (main "SO THREE MONTHS AGO I MADE" curiosity vs variant "IT SOUNDS SIMPLE BUT IT MORE THAN
   DOUBLED MY WATCH TIME" payoff — same edit, different hook); stat graphic "2x" at 14.28s
