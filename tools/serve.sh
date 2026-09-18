@@ -69,6 +69,55 @@ if [ ! -d "$LIBS" ] || [ -z "$(ls -A "$LIBS" 2>/dev/null)" ]; then
   find "$TOOLS/chrome-libs/extract" -name "*.so*" -exec cp -a {} "$LIBS"/ \; 2>/dev/null || true
 fi
 
+echo "==> heal: chrome-headless-shell install integrity"
+# A partial chrome install (icudtl.dat stripped) makes chrome IMMEDIATE_CRASH
+# (SIGTRAP) at startup: puppeteer reports "Failed to launch ... Code: null" and
+# every render hangs for 40 minutes. A full wipe (sandbox reset) removes the
+# whole install. Restore OFFLINE from the bundled zip in tools/ when present
+# (survives resets), else from the hyperframes cache zip, else warn.
+CHROME_ROOT="$HOME/.cache/hyperframes/chrome/chrome-headless-shell"
+# bundled zip is version-prefixed like hyperframes' own cache: 152.0.7977.30-chrome-headless-shell-linux64.zip
+LOCAL_CHROME_ZIP=$(ls "$TOOLS"/*-chrome-headless-shell-linux64.zip 2>/dev/null | head -1 || true)
+install_from_zip() { # $1 = zip; extracts to CHROME_ROOT/linux-<ver>/
+  local ver
+  ver=$(basename "$1" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' || basename "$1" | cut -d- -f1)
+  mkdir -p "$CHROME_ROOT/linux-$ver"
+  (cd "$CHROME_ROOT/linux-$ver" && unzip -oq "$1")
+  cp -n "$1" "$CHROME_ROOT/" 2>/dev/null || true
+}
+if [ ! -x "$CHROME_ROOT"/linux-*/chrome-headless-shell-linux64/chrome-headless-shell ]; then
+  if [ -n "${LOCAL_CHROME_ZIP:-}" ]; then
+    echo "    chrome install missing — extracting OFFLINE from $(basename "$LOCAL_CHROME_ZIP")"
+    install_from_zip "$LOCAL_CHROME_ZIP"
+  else
+    echo "    WARNING: chrome install missing and no local zip in $TOOLS — run: npx hyperframes browser ensure (downloads ~120MB)"
+  fi
+fi
+for inst in "$CHROME_ROOT"/linux-*/chrome-headless-shell-linux64; do
+  if [ -f "$inst/chrome-headless-shell" ] && [ ! -f "$inst/icudtl.dat" ]; then
+    zipdir=$(dirname "$inst")
+    zip=$(ls "$zipdir"/*.zip 2>/dev/null | head -1 || true)
+    [ -z "${zip:-}" ] && [ -n "${LOCAL_CHROME_ZIP:-}" ] && zip="$LOCAL_CHROME_ZIP"
+    if [ -n "${zip:-}" ]; then
+      echo "    icudtl.dat missing in $inst — re-extracting from $(basename "$zip")"
+      (cd "$zipdir" && unzip -oq "$zip")
+    else
+      echo "    WARNING: $inst incomplete and no zip to restore from — run: npx hyperframes browser ensure"
+    fi
+  fi
+done
+
+echo "==> heal: swap (3GB — OOM headroom for renders; kernel swap state dies on reset)"
+if ! sudo swapon --show 2>/dev/null | grep -q swapfile; then
+  if [ ! -f /home/user/swapfile ]; then
+    sudo fallocate -l 3G /home/user/swapfile 2>/dev/null && \
+      sudo chmod 600 /home/user/swapfile && \
+      sudo mkswap /home/user/swapfile >/dev/null 2>&1 || true
+  fi
+  sudo swapon /home/user/swapfile 2>/dev/null || true
+fi
+free -m 2>/dev/null | awk '/^Swap/ {print "    swap: "$2" MB total"}'
+
 echo "==> heal: faster-whisper + edge-tts (model downloads lazily on first transcribe)"
 python3 -c "import faster_whisper" 2>/dev/null || pip3 install --user -q faster-whisper
 python3 -c "import edge_tts" 2>/dev/null || pip3 install --user -q edge-tts
@@ -83,7 +132,8 @@ echo "==> restore session work (idempotent — re-writes new files, re-applies p
   python3 tools/reapply4.py >/dev/null && \
   python3 tools/reapply5.py >/dev/null && \
   python3 tools/reapply6.py >/dev/null && \
-  python3 tools/reapply7.py >/dev/null)
+  python3 tools/reapply7.py >/dev/null && \
+  python3 tools/reapply8.py >/dev/null)
 
 echo "==> deps + build (if missing or stale)"
 if [ ! -d "$REPO/node_modules" ]; then

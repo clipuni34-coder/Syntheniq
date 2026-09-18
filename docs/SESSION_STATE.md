@@ -1,15 +1,21 @@
-# SESSION_STATE — recovery recipe (updated 2026-09-16, post reset #8)
+# SESSION_STATE — recovery recipe (updated 2026-09-17, post reset #21)
 
 ## If the sandbox was reset again
-1. `bash tools/serve.sh --heal-only`   (heals node22, ffmpeg-static+drawtext, chrome-libs, whisper, edge-tts,
-   **restores session work (writers + reapply1→6)**, deps, dist, web out — ONE COMMAND, ~60s, proven after reset #13)
+1. `bash tools/serve.sh --heal-only`   (heals node22, ffmpeg-static+drawtext, chrome-libs,
+   **chrome-headless-shell install — OFFLINE from tools/152.0.7977.30-chrome-headless-shell-
+   linux64.zip (119MB, bundled in tools/, survives resets; icudtl.dat = root cause of the
+   render-hang crashes)**, **swap 3GB**, whisper, edge-tts, **restores session work
+   (writers + reapply1→8)**, deps, dist, web out — ONE COMMAND, ~60s, **100% offline** —
+   proven after resets #21–#28)
 2. **Restore NEW source files** (resets delete files not in the original snapshot):
    `python3 tools/write-session-files.py && python3 tools/write-session-tests.py`
    (graphics.ts, qc-editorial.ts, ai/router.ts, test/failover-check.mjs, test/regression.mjs)
-3. **Re-apply patches to tracked files** (idempotent; skips if already applied; ORDER MATTERS 1→6):
-   `python3 tools/reapply1.py && python3 tools/reapply2.py && python3 tools/reapply3.py && python3 tools/reapply4.py && python3 tools/reapply5.py && python3 tools/reapply6.py`
-   (reapply6 = UI fixes: deep links /project→project.html, done() marks all stages done,
-   whisper carry-over hyphen tokens "-by"→"by"; reapply6's jobs.ts anchor needs reapply1 first)
+3. **Re-apply patches to tracked files** (idempotent; skips if already applied; ORDER MATTERS 1→8):
+   `for i in 1 2 3 4 5 6 7 8; do python3 tools/reapply$i.py; done`
+   (reapply6 = UI fixes; **reapply8 = the two fixes that postdate reapply1-7: full openai.ts
+   (json_object not json, lowercase-json input guard, per-model temperature auto-learning,
+   image data-URL comma) + test/openai-client.mjs (15/15) + server.ts startup reconcile
+   (crash-consistency) + jobs.ts hydrateJob per-load guard removed**)
 4. Rebuild: `PATH=/home/user/tools/node-v22.14.0-linux-x64/bin:$PATH npm run build:api && npm run build:web`
 5. Start server (start_process):
    `export PATH=/home/user/tools/ffmpeg-static:/home/user/tools/node-v22.14.0-linux-x64/bin:$PATH; cd /home/user/Syntheniq/apps/api && NODE_ENV=production PORT=8787 SYNTHENIQ_DATA=$PWD/data SYNTHENIQ_PASSWORD=syntheniq-2026 WEB_OUT_DIR=/home/user/Syntheniq/apps/web/out exec /home/user/tools/node-v22.14.0-linux-x64/bin/node dist/server.js`
@@ -20,6 +26,10 @@
    - chrome-libs: `cd chrome-libs && for d in *.deb; do dpkg-deb -x "$d" extract; done && find extract -name "*.so*" -exec cp -a {} libs/ \;`
    - `npm install --no-audit --no-fund` (root) · `pip3 install --user faster-whisper`
    - `git init -b dev/finish-pipeline` + snapshot commit, then steps 2–6
+   - **RESET #20 note**: serve.sh's git re-init leaves NO remote configured and the PAT was in
+     /tmp (wiped) — to push: `git remote add origin
+     https://x-access-token:<PAT>@github.com/clipuni34-coder/Syntheniq.git` then
+     `git push origin dev/finish-pipeline`. Local head: 61c277c (remote was 79bd34b).
    - test source video (also wiped): regenerate with `python3 -m edge-tts --voice en-US-GuyNeural
      -f /tmp/monologue.txt --write-media vo.mp3` + ffmpeg testsrc2 1080x1920@30 mux (monologue
      text is in the transcript of any old E2E job, or rewrite ~280 words on editing/retention)
@@ -34,6 +44,46 @@
   API contract: json_object, lowercase-json input guard, per-model temperature auto-learning)
 - `node apps/api/test/regression.mjs`      → expect 22/22 (cases A-D, real renders ~3.5 min)
 
+- **RENDER-HANG ROOT CAUSE (found + fixed, 2026-09-17): chrome-headless-shell's `icudtl.dat`
+  (and the .pak/data files) were missing from the extracted install dir, leaving only
+  ABOUT/LICENSE/binary. Without icudtl.dat chrome IMMEDIATE_CRASH()s at startup (SIGTRAP,
+  si_code=SI_KERNEL — a CHECK failure, NOT seccomp/OOM/missing-lib); puppeteer surfaces this as
+  "Failed to launch the browser process: Code: null" and hyperframes then hangs ~forever in
+  "Creating capture session" (40-min watchdog ×4 per job). Diagnosis path that worked: strace the
+  binary (last syscalls = read TZif → write ICU error → SIGTRAP; the strace line
+  `openat(.../icudtl.dat) = -1 ENOENT` is the smoking gun). FIX: `unzip -oq` the cached zip at
+  ~/.cache/hyperframes/chrome/chrome-headless-shell/<ver>-...zip into its linux-<ver>/ dir.
+  PREVENTION: serve.sh now re-extracts the chrome install automatically when icudtl.dat is missing
+  (commit 61c277c). After the fix the SAME c7bdd1cd job completed: pipeline complete in 1182s,
+  2 clips + 2 variants, QC 2/2, all 4 MP4s downloadable via /files/ (h264 1080x1920 + aac).
+  Note: `timeout N chrome ... | head` masks the exit code (you see head's 0) — check PIPESTATUS
+  or run chrome to a file to catch the 133 (128+5=SIGTRAP).
+- **RESET #22: SELF-HEAL PROVEN (2026-09-17)**: reset #22 rolled the tree back past the
+  reapply8 fixes again (openai.ts/server.ts/jobs.ts stale, chrome install wiped, swap gone,
+  .git wiped) — exactly the failure mode reapply8 was built for. `bash tools/serve.sh`
+  (one command) fully recovered: reapply8 rewrote openai.ts + openai-client.mjs, re-patched
+  server.ts reconcile + jobs.ts guard removal, rebuilt dist, git re-snapshot (ccc71b5 now
+  CONTAINS the fixed tree, so future snapshots inherit the fixes), chrome re-downloaded
+  (`npx hyperframes browser ensure` — serve.sh only warns; hyperframes needs the ensure call
+  or a render to trigger the download), swap 3GB auto-healed (NEW in serve.sh: idempotent
+  fallocate/mkswap/swapon block). Tests post-restore: openai-client 15/15, failover 9/9.
+  E2E 8d8c017e ran on this stack. **The reset-proofing is now closed-loop.**
+- **RESET #21 DRIFT + REPAIR (2026-09-17)**: reset #21 rolled the tree back past BOTH the
+  openai.ts live-API fix and the crash-consistency reconcile (the surviving reapply1-7 chain
+  predates them; the writers write nothing for openai). Detected by symptom: a fresh job
+  logged "ai[video]: no provider available — heuristic offline mode" while /v1/config said
+  openai configured (the video 400 put openai in 90s cooldown; analyze/plan then skipped).
+  Live API errors found + fixed (all now locked in test/openai-client.mjs, 15/15):
+  (a) image data URL must be `data:<mime>;base64,<b64>` — the old tree sent it WITHOUT the
+  comma → "Invalid 'input[0].content[0].image_url' ... without the ',' separator";
+  (b) text.format must be `json_object` (not `json`); (c) temperature is 400'd by gpt-5.6-*
+  → per-model auto-learning + retry. Fix persisted via tools/reapply8.py (wired into
+  serve.sh after reapply7). LIVE-PROVEN on job 60c52c6d: ai[video] ok in 10s (16 frames),
+  ai[analyze] ok in 12s, ai[plan] ok in 19s — full openai/gpt-5.6-luna pipeline.
+  NOTE: retrying a DONE job re-uses ALL persisted stage outputs (audio/transcribe/analyze/
+  plan/prep/package) — it does NOT re-run the AI. To force a fresh AI pass, upload a new
+  project. The startup reconcile was live-verified on this stack (orphaned a5503dde marked
+  'interrupted' at boot after a SIGKILL'd server).
 - CRASH-RESUME E2E (c7bdd1cd): server kill -9'd mid-render → persisted state left 'running'.
   NEW startup reconcile (server.ts, before listen): orphaned running/cancelling jobs → 'interrupted'
   with clear error; UI shows "Paused — resume ready"; POST /retry accepted → resumed with
@@ -69,7 +119,34 @@
   per-platform caption cards + Copy). No rendering defects found.
 - All three suites re-run green post reset #17: 9/9 + 14/14 + 22/22.
 
-## Current good state (2026-09-16, post reset #8 — full chain proven again)
+## Current good state (2026-09-18, post reset #24 — closed-loop self-heal proven)
+- **Reset-proofing is CLOSED-LOOP and 100% OFFLINE.** Resets #21–#28 (eight in one
+  session) each rolled the tree back, wiped chrome/swap/git/data/server; each recovered
+  with ONE command (`bash tools/serve.sh`): reapply8 re-applies the openai contract +
+  reconcile fixes, **chrome restores offline from the bundled tools/ zip** (added
+  2026-09-18: 152.0.7977.30-chrome-headless-shell-linux64.zip, 119MB — no more network
+  download after resets), swap self-heals, git re-snapshots (snapshot CONTAINS the
+  fixed tree). Fresh agent workspace without the zip: `npx hyperframes browser ensure`.
+- **Every acceptance path re-proven on the post-#24 stack (2026-09-18):**
+  - Crash-resume E2E (job 89b2e2ae) **ALL PASS** via `tools/crash-resume-e2e.sh`:
+    kill -9 mid-render → restart → startup reconcile → `interrupted` → POST /retry →
+    5 persisted-stage reuses → done, 2 MP4s, download verified.
+  - Cancel path: POST /cancel during transcribe → `cancelled` / "cancelled by user".
+  - E2E 5b36725b: 788s, QC 1/1, live openai/gpt-5.6-luna (video 14s/analyze 11s/plan 22s),
+    on-demand variant endpoint 200→render→200, all downloads 200.
+  - Tests: openai-client 15/15 · failover 9/9 · regression 22/22.
+  - UI 5/5 fresh screenshots (docs/ui-*.png) — live provider badges visible.
+- **Handoff for a new agent: README.md "Agent handoff" section** (one-command recovery,
+  the 3 test gates, AI config location, exact push command with PAT placeholder, rules).
+- **Only outstanding item: GitHub push needs a PAT** (never stored in the sandbox —
+  searched exhaustively: no helper/store/env/gh/token-shaped strings). Remote:
+  `dev/finish-pipeline` on clipuni34-coder/Syntheniq; local head: 64f8c3b.
+- Push history: only 79bd34b (crash-consistency) was ever pushed (remote was wiped by
+  reset #20 along with the PAT). Everything after — the chrome icudtl heal, the openai
+  contract fixes, the reapply8 persistence, swap heal, handoff docs, this E2E harness —
+  is local-only and must be pushed when a PAT is available.
+
+### History (2026-09-16, post reset #8 — full chain proven again)
 - RESET #8 recovered from scratch in ~15 min: writers + reapply1-6 + builds + E2E + 31/31 tests
   (the reapply/writer/ui-shots files SURVIVE resets — only tracked source, .git, node_modules,
   dist, out, toolchain bins, data, /tmp, pip-user pkgs are wiped)

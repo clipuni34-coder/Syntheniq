@@ -141,10 +141,9 @@ async function hydrateJob(projectId: string): Promise<Job> {
     state = newJobState(projectId);
     await saveJob(state);
   }
-  // NOTE: crash-left "running" jobs are reconciled at server STARTUP (server.ts
-  // marks them 'interrupted' before any request is served) — NOT here, because a
-  // legitimately fresh job is also 'running' when it reaches this point and
-  // stamping it would leave a ghost error on every upload/retry.
+  // NOTE: crash handling for jobs left 'running' by a dead server is
+  // centralized in server.ts startup reconcile. No per-load stamping here —
+  // it misfired on fresh uploads whose job legitimately starts running.
   const job = new Job(state);
   job.state.status = 'running';
   await saveJob(job.state);

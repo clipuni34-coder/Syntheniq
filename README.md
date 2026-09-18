@@ -148,3 +148,29 @@ tools/               test-source generator (piper TTS + testsrc2)
 - maximum number of genuinely usable clips — each self-contained with hook + payoff
 - per-clip package: MP4, title, TikTok/IG/YT captions, hashtags, CTA,
   thumbnail, source timestamps, edit rationale, optional variants
+
+## Agent handoff (sandbox recovery)
+
+If this project is being picked up by a new agent after a sandbox reset:
+
+1. **Recover the whole stack with one command — 100% offline:** `bash tools/serve.sh`
+   (heals node22, ffmpeg+drawtext, chrome libs + **chrome install restored from the
+   bundled tools/ zip**, swap, whisper/edge-tts, restores session work via
+   `tools/reapply1→8.py`, builds, auto-loads AI config from `/home/user/syntheniq.env`
+   — keys live OUTSIDE the repo on purpose — then starts the API on :8787).
+   Fresh workspace without the bundled zip: `npx hyperframes browser ensure` once.
+2. **Full state, history, acceptance criteria, known pitfalls:** `docs/SESSION_STATE.md`
+   (read this before touching anything; it is the single source of truth for the
+   session, including root-cause writeups).
+3. **Tests after any rebuild** (all must pass):
+   - `node apps/api/test/openai-client.mjs` → 15/15 (locks the live OpenAI API contract)
+   - `node apps/api/test/failover-check.mjs` → 9/9 (provider failover semantics)
+   - `node apps/api/test/regression.mjs` → 22/22 (real renders)
+4. **AI config** lives in `/home/user/syntheniq.env` (outside the public repo):
+   `OPENAI_API_KEY` + `AI_PROVIDER=openai` + `AI_MODEL=gpt-5.6-luna`.
+5. **GitHub:** remote `dev/finish-pipeline` on `clipuni34-coder/Syntheniq`;
+   pushing requires a PAT (never stored in the sandbox). Add the remote, then
+   `git push https://x-access-token:<PAT>@github.com/clipuni34-coder/Syntheniq.git dev/finish-pipeline`.
+6. **Hard rules:** incremental reversible changes only — no force-push, no reset,
+   no deleting branches; never put secrets in the repo; the AI is the main editor
+   (it decides the edit), with graceful heuristic fallback when no provider is configured.

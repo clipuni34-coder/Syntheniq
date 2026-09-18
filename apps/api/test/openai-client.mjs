@@ -1,19 +1,29 @@
 #!/usr/bin/env node
 /**
- * openai-client-check — openai.ts live-API contract regression (mocked fetch, no network).
+ * openai-client — locks in the LIVE OpenAI Responses API contract
+ * (verified against api.openai.com 2026-09-17). 14/14 must PASS.
  *
- * Locks in the behaviors discovered against the real API on 2026-09-17 (E2E 3ac66526):
+ *   1. posts to /v1/responses with the configured model
+ *   2. json:true      → text.format.type = "json_object" (NOT "json" — 400)
+ *   3. json guard     → input lacking lowercase "json" gets "Respond in valid JSON." appended
+ *   4. json guard off → input already containing "json" is left untouched
+ *   5. json:false     → no text.format field at all
+ *   6. temperature    → sent by default for an unlearned model
+ *   7. temp rejected  → 400 mentioning temperature ⇒ model learned, retried WITHOUT it, succeeds
+ *   8. temp learned   → next call for same model sends no temperature from the start
+ *   9. per-model      → learning is per-model: a different model still sends temperature
+ *  10. other 400      → non-temperature 400 throws AiError (no silent retry)
+ *  11. 429            → retryable AiError
+ *  12. 500            → retryable AiError
+ *  13. success text   → output_text returned, provider/model stamped
+ *  14. success json   → fenced/loose JSON parsed via parseJson
+ *  15. image data URL → input_image uses "data:<mime>;base64,<b64>" (live 400
+ *                       "without the ',' separator" proves the comma is required)
  *
- *   1. json mode      → sends text.format.type = 'json_object' (the API rejects 'json')
- *   2. json-word guard→ json_object mode requires literal lowercase "json" in input;
- *                       client appends it when missing, and not when already present
- *   3. temperature    → gpt-5.6-* rejects it: 400 → retry once WITHOUT temperature,
- *                       model learned (subsequent calls never send it again)
- *   4. success path   → output_text parsed, JSON extracted, provider/model/latency set
- *   5. image input    → base64 frames sent as input_image data-URLs
- *   6. errors         → 429 retryable, 400 non-retryable, message includes model
+ * Mocks global fetch — no network, no key needed.
  */
-import { callOpenai } from '../dist/ai/openai.js';
+import { callOpenai, _resetTemperatureLearning } from '../dist/ai/openai.js';
+import { AiError } from '../dist/ai/types.js';
 
 let pass = 0;
 let fail = 0;
@@ -27,125 +37,208 @@ function check(name, cond, detail = '') {
   }
 }
 
-const KEY = 'sk-test';
-const calls = [];
-let responder;
-
-function jsonResponse(status, body) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body };
-}
-globalThis.fetch = async (url, init) => {
-  const body = JSON.parse(init.body);
-  calls.push({ url, body });
-  return responder(body);
+// fetch mock harness: queued responses (Response-like), captures request bodies
+let captured = [];
+let queued = [];
+let realFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  const body = JSON.parse(opts.body);
+  captured.push({ url: String(url), body });
+  const next = queued.shift() ?? okResponse('{"ok": true}');
+  return next;
 };
 
-const okResp = (text) => jsonResponse(200, { output_text: text });
-const JSON_REPLY = '{"scene":"test","energy":7}';
-
-try {
-  /* 1. json_object, never 'json' */
-  calls.length = 0;
-  responder = () => okResp(JSON_REPLY);
-  await callOpenai(
-    { system: 'Respond with JSON only: {"a":1}.', input: 'Analyze this frame.', json: true, maxTokens: 100 },
-    KEY,
-    'gpt-5.6-luna',
-  );
-  const b1 = calls[0].body;
-  check('json mode sends json_object', b1.text?.format?.type === 'json_object', JSON.stringify(b1.text));
-  check('json mode never sends type "json"', b1.text?.format?.type !== 'json');
-  check('fresh model: temperature sent by default', b1.temperature === 0.3, String(b1.temperature));
-
-  /* 2. json-word guard */
-  calls.length = 0;
-  responder = () => okResp(JSON_REPLY);
-  await callOpenai(
-    { system: 'You are a video editor. Respond with JSON only.', input: 'Analyze this frame.', json: true },
-    KEY,
-    'test-model-jsonword',
-  );
-  const text1 = calls[0].body.input[0].content.find((c) => c.type === 'input_text').text;
-  check('appends lowercase "json" when missing', /json/.test(text1) && text1.endsWith('(Respond in json.)'), text1.slice(-60));
-
-  calls.length = 0;
-  await callOpenai(
-    { system: 'You are a video editor.', input: 'Return a json object.', json: true },
-    KEY,
-    'test-model-jsonword',
-  );
-  const text2 = calls[0].body.input[0].content.find((c) => c.type === 'input_text').text;
-  check('does not append when "json" already present', text2 === 'Return a json object.', text2);
-
-  /* 3. temperature: 400 → retry without, then learned */
-  const tempModel = 'test-model-temperature';
-  calls.length = 0;
-  responder = (body) =>
-    'temperature' in body
-      ? jsonResponse(400, { error: { message: "Unsupported parameter: 'temperature' is not supported with this model." } })
-      : okResp(JSON_REPLY);
-  const r3 = await callOpenai(
-    { system: 'You are a video editor. Respond with JSON only.', input: 'Analyze this frame.', json: true },
-    KEY,
-    tempModel,
-  );
-  check('temperature 400 → succeeded after retry', r3.json?.scene === 'test', JSON.stringify(r3.json));
-  check('retry chain: first with temp, second without', calls.length === 2 && 'temperature' in calls[0].body && !('temperature' in calls[1].body), `calls=${calls.length}`);
-  calls.length = 0;
-  await callOpenai(
-    { system: 'You are a video editor. Respond with JSON only.', input: 'Analyze this frame.', json: true },
-    KEY,
-    tempModel,
-  );
-  check('learned model: subsequent call omits temperature (no retry)', calls.length === 1 && !('temperature' in calls[0].body), `calls=${calls.length}`);
-
-  /* 4. success path */
-  calls.length = 0;
-  responder = () => okResp(JSON_REPLY);
-  const r4 = await callOpenai(
-    { system: 'You are a video editor. Respond with JSON only.', input: 'Analyze this frame.', json: true },
-    KEY,
-    'test-model-success',
-  );
-  check('parses JSON + provider/model/latency', r4.json?.energy === 7 && r4.provider === 'openai' && r4.model === 'test-model-success' && r4.latencyMs >= 0, JSON.stringify(r4));
-  const r4b = await callOpenai({ system: 'Be terse.', input: 'Say hi.' }, KEY, 'test-model-success');
-  check('text mode: text set, json null', typeof r4b.text === 'string' && r4b.json === null, JSON.stringify(r4b));
-
-  /* 5. image input */
-  calls.length = 0;
-  responder = () => okResp(JSON_REPLY);
-  await callOpenai(
-    { system: 'Respond with JSON only.', input: 'Describe.', json: true, images: [{ data: 'QUJD', mimeType: 'image/png' }] },
-    KEY,
-    'test-model-images',
-  );
-  const content = calls[0].body.input[0].content;
-  const img = content.find((c) => c.type === 'input_image');
-  check('image sent as input_image data-URL', img?.image_url === 'data:image/png;base64,QUJD', img?.image_url);
-  check('text part still present', content.some((c) => c.type === 'input_text'));
-
-  /* 6. errors */
-  calls.length = 0;
-  responder = () => jsonResponse(429, { error: { message: 'Rate limited' } });
-  let err = null;
-  try {
-    await callOpenai({ system: 'x', input: 'y' }, KEY, 'test-model-errors');
-  } catch (e) {
-    err = e;
-  }
-  check('429 → retryable AiError', err?.retryable === true && /rate limited/i.test(err.message), err?.message);
-  calls.length = 0;
-  responder = () => jsonResponse(400, { error: { message: 'bad model name' } });
-  err = null;
-  try {
-    await callOpenai({ system: 'x', input: 'y' }, KEY, 'test-model-errors2');
-  } catch (e) {
-    err = e;
-  }
-  check('400 → non-retryable, message names model', err?.retryable === false && /test-model-errors2/.test(err.message), err?.message);
-} finally {
-  delete globalThis.fetch;
+function okResponse(payload, { outputText } = {}) {
+  const data = {
+    output_text: outputText !== undefined ? outputText : String(payload),
+    output: [],
+  };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => data,
+    text: async () => JSON.stringify(data),
+  };
+}
+function errResponse(status, message) {
+  const msg = message ?? 'error';
+  return {
+    ok: false,
+    status,
+    json: async () => ({ error: { message: msg } }),
+    text: async () => JSON.stringify({ error: { message: msg } }),
+  };
 }
 
-console.log(`\nopenai-client-check: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+const KEY = 'sk-test';
+const MODEL = 'gpt-5.6-luna';
+const req = (over = {}) => ({
+  task: 'plan',
+  system: 'You are an editor.',
+  input: over.input ?? 'Pick the moments.',
+  json: over.json ?? false,
+  temperature: over.temperature ?? 0.3,
+});
+
+try {
+  // ── 1. endpoint + model ─────────────────────────────────────────────
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req(), KEY, MODEL);
+  check(
+    'posts to /v1/responses with the configured model',
+    captured[0]?.url.endsWith('/v1/responses') && captured[0]?.body?.model === MODEL,
+    `${captured[0]?.url} ${captured[0]?.body?.model}`,
+  );
+
+  // ── 2. json_object format ───────────────────────────────────────────
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req({ json: true }), KEY, MODEL);
+  check(
+    'json:true → text.format.type = "json_object"',
+    captured[0]?.body?.text?.format?.type === 'json_object',
+    JSON.stringify(captured[0]?.body?.text),
+  );
+
+  // ── 3. lowercase-json input guard ───────────────────────────────────
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req({ json: true, input: 'Pick the moments.' }), KEY, MODEL);
+  const inputText =
+    captured[0]?.body?.input?.[0]?.content?.find((c) => c.type === 'input_text')?.text ?? '';
+  check(
+    'input lacking "json" gets JSON instruction appended',
+    /respond in valid json\./i.test(inputText),
+    JSON.stringify(inputText),
+  );
+
+  // ── 4. guard does not double-add ────────────────────────────────────
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req({ json: true, input: 'Return JSON only.' }), KEY, MODEL);
+  const inputText2 =
+    captured[0]?.body?.input?.[0]?.content?.find((c) => c.type === 'input_text')?.text ?? '';
+  check(
+    'input already containing "json" left untouched',
+    inputText2 === 'Return JSON only.',
+    JSON.stringify(inputText2),
+  );
+
+  // ── 5. no format field when json:false ──────────────────────────────
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req({ json: false }), KEY, MODEL);
+  check('json:false → no text.format', !('text' in (captured[0]?.body ?? {})));
+
+  // ── 6. temperature sent by default ──────────────────────────────────
+  _resetTemperatureLearning();
+  queued = [okResponse('{"a":1}')];
+  captured = [];
+  await callOpenai(req({ temperature: 0.3 }), KEY, 'gpt-5.6-luna');
+  check(
+    'temperature sent for unlearned model',
+    captured[0]?.body?.temperature === 0.3,
+    JSON.stringify(captured[0]?.body?.temperature),
+  );
+
+  // ── 7. temperature rejected → learn + retry without it ──────────────
+  _resetTemperatureLearning();
+  queued = [
+    errResponse(400, "Unsupported value: 'temperature' is not supported with this model."),
+    okResponse('{"a":2}'),
+  ];
+  captured = [];
+  const r7 = await callOpenai(req({ temperature: 0.3 }), KEY, MODEL);
+  check('temp 400 → retried without temperature, succeeds', captured.length === 2 && captured[1]?.body?.temperature === undefined && r7.text === '{"a":2}', `calls=${captured.length}`);
+
+  // ── 8. learned model skips temperature from the start ───────────────
+  queued = [okResponse('{"a":3}')];
+  captured = [];
+  await callOpenai(req({ temperature: 0.3 }), KEY, MODEL);
+  check(
+    'learned model sends no temperature (single call)',
+    captured.length === 1 && captured[0]?.body?.temperature === undefined,
+  );
+
+  // ── 9. learning is per-model ────────────────────────────────────────
+  queued = [okResponse('{"a":4}')];
+  captured = [];
+  await callOpenai(req({ temperature: 0.2 }), KEY, 'gpt-5.6-terra');
+  check(
+    'different model still sends temperature',
+    captured[0]?.body?.temperature === 0.2,
+    JSON.stringify(captured[0]?.body?.temperature),
+  );
+
+  // ── 10. non-temperature 400 throws (no silent retry) ────────────────
+  _resetTemperatureLearning();
+  queued = [errResponse(400, "Invalid value for 'max_output_tokens'")];
+  captured = [];
+  let threw10 = null;
+  try {
+    await callOpenai(req(), KEY, 'gpt-5.6-luna');
+  } catch (e) {
+    threw10 = e;
+  }
+  check(
+    'other 400 → AiError, exactly one call',
+    threw10 instanceof AiError && captured.length === 1,
+    `${threw10?.message} calls=${captured.length}`,
+  );
+
+  // ── 11. 429 retryable ───────────────────────────────────────────────
+  queued = [errResponse(429, 'Rate limited')];
+  let err11 = null;
+  try {
+    await callOpenai(req(), KEY, MODEL);
+  } catch (e) {
+    err11 = e;
+  }
+  check('429 → retryable AiError', err11 instanceof AiError && err11.retryable === true, String(err11?.retryable));
+
+  // ── 12. 500 retryable ───────────────────────────────────────────────
+  queued = [errResponse(500, 'boom')];
+  let err12 = null;
+  try {
+    await callOpenai(req(), KEY, MODEL);
+  } catch (e) {
+    err12 = e;
+  }
+  check('500 → retryable AiError', err12 instanceof AiError && err12.retryable === true, String(err12?.retryable));
+
+  // ── 13. success: output_text + stamps ───────────────────────────────
+  queued = [okResponse('{"x":1}', { outputText: 'hello there' })];
+  const r13 = await callOpenai(req(), KEY, MODEL);
+  check(
+    'success → output_text, provider/model stamped',
+    r13.text === 'hello there' && r13.provider === 'openai' && r13.model === MODEL && r13.latencyMs >= 0,
+    JSON.stringify({ t: r13.text, p: r13.provider }),
+  );
+
+  // ── 14. success: fenced JSON parsed ─────────────────────────────────
+  queued = [okResponse('{"y":2}', { outputText: '```json\n{"clip": 1}\n```' })];
+  const r14 = await callOpenai(req({ json: true }), KEY, MODEL);
+  check('success json → fenced payload parsed', r14.json?.clip === 1, JSON.stringify(r14.json));
+
+  // ── 15. image data URL has the comma separator ──────────────────────
+  queued = [okResponse('{"z":6}')];
+  captured = [];
+  await callOpenai(
+    { ...req(), images: [{ data: 'QUJD', mimeType: 'image/jpeg' }] },
+    KEY,
+    MODEL,
+  );
+  const imgUrl =
+    captured[0]?.body?.input?.[0]?.content?.find((c) => c.type === 'input_image')?.image_url ?? '';
+  check(
+    'image → data URL with comma separator',
+    imgUrl === 'data:image/jpeg;base64,QUJD',
+    imgUrl,
+  );
+} finally {
+  globalThis.fetch = realFetch;
+}
+
+console.log(`\nopenai-client: ${pass}/15 pass, ${fail} fail`);
+process.exit(fail === 0 ? 0 : 1);
