@@ -28,12 +28,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # python3/pip: local faster-whisper transcription + edge-tts.
 # libnss3/libgbm1/... set: system libraries required by the headless Chrome
 # HyperFrames uses to render (verified against the official CLI's own
-# missing-library report; libasound2t64 = bookworm's time_t64 name).
+# missing-library report).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg python3 python3-pip fonts-dejavu ca-certificates curl unzip \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
       libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 \
-      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- web export (static studio) -------------------------------------------
@@ -63,7 +63,24 @@ RUN npm ci --workspace @syntheniq/api --include-workspace-root=false
 # Pre-cache HyperFrames' bundled headless Chrome (official CLI, version-aware)
 # so the first render never downloads ~115 MB and never hits a partial
 # install (missing icudtl.dat → IMMEDIATE_CRASH → 40-minute render hangs).
-RUN npx hyperframes browser ensure || npx hyperframes browser
+#
+# ARCHITECTURE NOTE (verified 2026-09-18 against the official manifest):
+# Chrome-for-Testing publishes NO linux/arm64 builds — only linux64. So:
+#   • x86-64 hosts: standard build, headless Chrome pre-cached below.
+#   • ARM64 hosts (e.g. Oracle A1 Ampere): build with
+#       docker compose build (add build args INSTALL_CHROMIUM=1)
+#     to ship Debian's chromium; the CMD below auto-detects it via
+#     HYPERFRAMES_BROWSER_PATH (HyperFrames' own env hook).
+#   • Apple Silicon Macs: easiest is the standard amd64 image under
+#     Docker Desktop's Rosetta/QEMU emulation:
+#       docker build --platform linux/amd64 -t syntheniq .
+ARG INSTALL_CHROMIUM=0
+RUN if [ "$INSTALL_CHROMIUM" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends chromium \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+      npx hyperframes browser ensure || true; \
+    fi
 # Build the API, then strip dev deps.
 COPY apps/api ./apps/api
 RUN npm run build:api && npm prune --workspace @syntheniq/api --omit=dev
@@ -83,4 +100,6 @@ VOLUME /data
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=6s --start-period=30s --retries=3 \
   CMD node -e "fetch(\`http://127.0.0.1:\${process.env.PORT || 8787}/v1/health\`).then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["node", "apps/api/dist/server.js"]
+# Auto-detect a distro chromium (ARM64 builds) before starting; on x86-64
+# this is a no-op and HyperFrames uses its cached headless shell.
+CMD ["/bin/sh", "-c", "[ -z \"$HYPERFRAMES_BROWSER_PATH\" ] && [ -x /usr/bin/chromium ] && export HYPERFRAMES_BROWSER_PATH=/usr/bin/chromium; exec node apps/api/dist/server.js"]

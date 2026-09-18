@@ -14,6 +14,10 @@ services:
         # Set when the studio is reverse-proxied at a URL without :8787
         # (e.g. https://syntheniq.example.com). Blank for port-based access.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        # ARM64 hosts only (e.g. Oracle A1): Chrome-for-Testing has no
+        # linux/arm64 build, so ship Debian's chromium instead.
+        # x86-64 hosts: leave 0 (headless shell is pre-cached at build).
+        INSTALL_CHROMIUM: ${INSTALL_CHROMIUM:-0}
     image: syntheniq:latest
     container_name: syntheniq
     ports:
@@ -26,9 +30,13 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
       AI_PROVIDER: ${AI_PROVIDER:-}          # empty = auto-pick; openai|gemini|grok
-      AI_MODEL: ${AI_MODEL:-}                # optional; must match AI_PROVIDER's family
+      AI_MODEL: ${AI_MODEL:-}                # optional; family must match AI_PROVIDER, else that provider's default is used
       AI_FALLBACK: ${AI_FALLBACK:-}          # e.g. gemini,openai
       SYNTHENIQ_WHISPER_MODEL: ${SYNTHENIQ_WHISPER_MODEL:-small}
+      # Optional: point HyperFrames at a specific browser binary (e.g. a
+      # distro chromium). Blank = auto (cached headless shell, or auto-detected
+      # /usr/bin/chromium when the image was built with INSTALL_CHROMIUM=1).
+      HYPERFRAMES_BROWSER_PATH: ${HYPERFRAMES_BROWSER_PATH:-}
     volumes:
       - syntheniq-data:/data
     restart: unless-stopped
