@@ -108,13 +108,30 @@ function taskModel(raw: string | undefined): string | undefined {
   return v || undefined;
 }
 
-/** Resolve the model for a task+provider given explicit config. */
+/** Model-name families each provider can actually serve (prefix match).
+ *  Guards against the class of bug where a global AI_MODEL from one
+ *  provider (e.g. gpt-5.6-luna) is forwarded to another provider (gemini)
+ *  and every call 404s, silently degrading the whole chain to heuristic. */
+const MODEL_FAMILY: Record<ProviderId, string[]> = {
+  openai: ['gpt-', 'o1', 'o3', 'o4', 'chatgpt'],
+  gemini: ['gemini-'],
+  grok: ['grok-'],
+};
+
+export function modelFitsProvider(model: string, provider: ProviderId): boolean {
+  const m = (model || '').toLowerCase();
+  return MODEL_FAMILY[provider].some((fam) => m.startsWith(fam));
+}
+
+/** Resolve the model for a task+provider given explicit config.
+ *  An explicit model (per-task or global AI_MODEL) is only honored when its
+ *  model family belongs to the provider being called; otherwise the
+ *  provider's own default for the task tier is used (graceful cross-provider
+ *  semantics: AI_PROVIDER=gemini + AI_MODEL=gpt-* must not 404 on gemini). */
 export function modelForTask(cfg: AiConfig, task: TaskId, provider: ProviderId): string {
-  return (
-    cfg.taskModel[task] ||
-    cfg.model ||
-    DEFAULT_MODELS[provider][TASK_TIER[task]]
-  );
+  const explicit = cfg.taskModel[task] || cfg.model;
+  if (explicit && modelFitsProvider(explicit, provider)) return explicit;
+  return DEFAULT_MODELS[provider][TASK_TIER[task]];
 }
 
 export const WHISPER_MODEL = (process.env.SYNTHENIQ_WHISPER_MODEL || 'small').trim();

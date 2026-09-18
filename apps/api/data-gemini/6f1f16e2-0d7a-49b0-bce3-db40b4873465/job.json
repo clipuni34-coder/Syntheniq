@@ -1,0 +1,813 @@
+{
+ "id": "6f1f16e2-0d7a-49b0-bce3-db40b4873465",
+ "createdAt": "2026-09-18T11:19:19.160Z",
+ "status": "done",
+ "stage": "complete",
+ "progress": 1,
+ "stages": {
+  "media-check": {
+   "status": "done",
+   "progress": 1
+  },
+  "audio": {
+   "status": "done",
+   "progress": 1
+  },
+  "transcribe": {
+   "status": "done",
+   "progress": 1
+  },
+  "analyze": {
+   "status": "done",
+   "progress": 1
+  },
+  "plan": {
+   "status": "done",
+   "progress": 1
+  },
+  "prep-media": {
+   "status": "done",
+   "progress": 1
+  },
+  "render": {
+   "status": "done",
+   "progress": 1
+  },
+  "package": {
+   "status": "done",
+   "progress": 1
+  },
+  "qc": {
+   "status": "done",
+   "progress": 1
+  },
+  "complete": {
+   "status": "done",
+   "progress": 1,
+   "detail": "complete"
+  }
+ },
+ "clips": [
+  {
+   "id": "clip-1",
+   "title": "Two Editing Changes: No Intros and Better Captions",
+   "status": "done",
+   "files": {
+    "mp4": "clip-1.mp4",
+    "meta": "clip-1_meta.json",
+    "thumb": "clip-1_thumb.jpg"
+   },
+   "variant": {
+    "hookText": "I spent six hours on one short, and it got 40 views.",
+    "title": "I Spent 6 Hours on a Short That Got 40 Views",
+    "status": "done",
+    "mp4": "clip-1_v1.mp4",
+    "thumb": "clip-1_v1_thumb.jpg"
+   },
+   "duration": 43.21,
+   "fps": 30
+  }
+ ],
+ "providers": {
+  "transcribe": "faster-whisper small",
+  "analyze": "heuristic/heuristic-v1",
+  "plan": "heuristic/heuristic-v1",
+  "package": "gemini/gemini-3.5-flash-lite",
+  "video": "heuristic/heuristic-v1",
+  "review": "openai/gpt-5.6-luna"
+ },
+ "logs": [
+  {
+   "t": "2026-09-18T11:19:19.395Z",
+   "level": "info",
+   "msg": "pipeline start"
+  },
+  {
+   "t": "2026-09-18T11:19:19.421Z",
+   "level": "info",
+   "msg": "media: 50.0s @ 30fps, 1920x1080, audio=true"
+  },
+  {
+   "t": "2026-09-18T11:19:19.480Z",
+   "level": "info",
+   "msg": "audio extracted (16kHz mono)"
+  },
+  {
+   "t": "2026-09-18T11:19:19.481Z",
+   "level": "info",
+   "msg": "[transcribe] whisper small (vad) ..."
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper] loading model 'small' ..."
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper] model ready in 3.0s, transcribing..."
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]       0.0s ->     3.8s  ' So three months ago, I made a huge mistake with my editing '"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]       4.2s ->     7.7s  ' I spent six hours on a single short, and it got 40 views.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]       8.0s ->     8.7s  ' Um 40.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]       9.1s ->    11.9s  ' That is the moment I decided to completely fix my process.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      14.1s ->    18.4s  ' The first thing that changed everything is that I stopped s'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      18.4s ->    18.7s  ' intro.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      19.1s ->    20.7s  ' No more hey guys, welcome back.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      21.0s ->    23.9s  ' I just start mid-sentence with the most interesting part.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      24.3s ->    27.1s  ' It sounds simple, but it more than doubled my watch time.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      28.8s ->    30.0s  ' The second thing is captions.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      30.0s ->    33.5s  ' If a viewer cannot read your screen, they cannot follow you'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      33.8s ->    38.2s  ' Big text, two or three words at a time, and highlight the i'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      38.6s ->    40.9s  ' People watch with a sound off all the time.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      43.0s ->    47.1s  ' If you fix just those two things, your retention will chang'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper]      47.5s ->    49.9s  ' Try it for one week, and come back and thank me.'"
+  },
+  {
+   "t": "2026-09-18T11:19:34.274Z",
+   "level": "info",
+   "msg": "[whisper] done in 11.6s (15 segments)"
+  },
+  {
+   "t": "2026-09-18T11:19:34.275Z",
+   "level": "info",
+   "msg": "[transcribe] done: 15 segments, coverage 100%, lang=en"
+  },
+  {
+   "t": "2026-09-18T11:19:34.418Z",
+   "level": "info",
+   "msg": "signals: 5 silences, 50 energy buckets"
+  },
+  {
+   "t": "2026-09-18T11:19:34.419Z",
+   "level": "info",
+   "msg": "video-understand: sampling 16 frames for multimodal analysis"
+  },
+  {
+   "t": "2026-09-18T11:19:49.200Z",
+   "level": "info",
+   "msg": "ai[video]: gemini/gemini-3.8-flash failed (retryable) — gemini gemini-3.8-flash: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later. (cooling down)"
+  },
+  {
+   "t": "2026-09-18T11:19:51.205Z",
+   "level": "info",
+   "msg": "ai[video]: openai/gpt-5.6-luna failed (retryable) — openai gpt-5.6-luna: Rate limit reached for gpt-5.6-luna in organization org-0We8y7C2J4zbFkVV8sthcuNx on tokens per min (TPM): Limit 100000, Used 100000, Requested 2693. Please try again in 19h23m22.56s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase your rate limit by adding a payment method to your account at https://platform.openai.com/account/billing. (cooling down)"
+  },
+  {
+   "t": "2026-09-18T11:19:51.205Z",
+   "level": "info",
+   "msg": "ai[video]: no provider available — using heuristic offline mode"
+  },
+  {
+   "t": "2026-09-18T11:19:51.205Z",
+   "level": "info",
+   "msg": "ai[analyze]: gemini cooling down (88s) — skipped"
+  },
+  {
+   "t": "2026-09-18T11:19:51.205Z",
+   "level": "info",
+   "msg": "ai[analyze]: openai cooling down (90s) — skipped"
+  },
+  {
+   "t": "2026-09-18T11:19:51.205Z",
+   "level": "info",
+   "msg": "ai[analyze]: no provider available — using heuristic offline mode"
+  },
+  {
+   "t": "2026-09-18T11:19:51.208Z",
+   "level": "info",
+   "msg": "analysis: 4 topics, 4 candidate moments, 4 dead-air spans (via heuristic/heuristic-v1, frames via heuristic/heuristic-v1)"
+  },
+  {
+   "t": "2026-09-18T11:19:51.208Z",
+   "level": "info",
+   "msg": "ai[plan]: gemini cooling down (88s) — skipped"
+  },
+  {
+   "t": "2026-09-18T11:19:51.208Z",
+   "level": "info",
+   "msg": "ai[plan]: openai cooling down (90s) — skipped"
+  },
+  {
+   "t": "2026-09-18T11:19:51.208Z",
+   "level": "info",
+   "msg": "ai[plan]: no provider available — using heuristic offline mode"
+  },
+  {
+   "t": "2026-09-18T11:19:52.426Z",
+   "level": "info",
+   "msg": "review[plan]: gemini failed — gemini gemini-3.8-flash: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later. (cooling down)"
+  },
+  {
+   "t": "2026-09-18T11:20:32.153Z",
+   "level": "info",
+   "msg": "review[plan]: openai/gpt-5.6-luna ok"
+  },
+  {
+   "t": "2026-09-18T11:20:32.154Z",
+   "level": "info",
+   "msg": "review: revised plan accepted (1 clips) — The two-clip split is not viable: clip 2 falls below the 20-second minimum after removing silence.,Clip 1's opening hook is incomplete and too weak for the first two seconds; replace it with the complete mistake claim.,The proposed retention beats are out of chronological order: the supposed major p"
+  },
+  {
+   "t": "2026-09-18T11:20:32.154Z",
+   "level": "info",
+   "msg": "plan: 1 clips via heuristic/heuristic-v1 (review: openai/gpt-5.6-luna) — clip-1[0-50s]"
+  },
+  {
+   "t": "2026-09-18T11:20:32.155Z",
+   "level": "warn",
+   "msg": "editorial: clip-1: first visual cue 3.2s in — weak hook window"
+  },
+  {
+   "t": "2026-09-18T11:20:32.155Z",
+   "level": "warn",
+   "msg": "editorial: clip-1: major payoff at 53% of clip (want ≥ 55.00000000000001%)"
+  },
+  {
+   "t": "2026-09-18T11:20:32.156Z",
+   "level": "info",
+   "msg": "[prep] clip-1 seg0: 0.0-11.9s (11.9s)"
+  },
+  {
+   "t": "2026-09-18T11:20:36.099Z",
+   "level": "info",
+   "msg": "[prep] clip-1 seg1: 14.1-27.1s (13.0s)"
+  },
+  {
+   "t": "2026-09-18T11:20:40.854Z",
+   "level": "info",
+   "msg": "[prep] clip-1 seg2: 28.8-40.9s (12.1s)"
+  },
+  {
+   "t": "2026-09-18T11:20:45.138Z",
+   "level": "info",
+   "msg": "[prep] clip-1 seg3: 43.0-44.8s (1.8s)"
+  },
+  {
+   "t": "2026-09-18T11:20:45.919Z",
+   "level": "info",
+   "msg": "[prep] clip-1 seg4: 45.4-49.9s (4.4s)"
+  },
+  {
+   "t": "2026-09-18T11:20:48.746Z",
+   "level": "info",
+   "msg": "[prep] clip-1: 5 segments, 43.2s comp, 0 cutaways, 3 punch-ins, 17 motion cues, 1 graphics"
+  },
+  {
+   "t": "2026-09-18T11:20:48.747Z",
+   "level": "info",
+   "msg": "render: clip-1 starting (43.2s @ 30fps)"
+  },
+  {
+   "t": "2026-09-18T11:20:48.772Z",
+   "level": "info",
+   "msg": "qc-pre: clip-1: 40 caption lines in composition"
+  },
+  {
+   "t": "2026-09-18T11:20:50.072Z",
+   "level": "info",
+   "msg": "[lint] clip-1: ok (1 warnings)"
+  },
+  {
+   "t": "2026-09-18T11:20:50.073Z",
+   "level": "info",
+   "msg": "[render] clip-1: hyperframes render (30fps, standard, 1 worker)"
+  },
+  {
+   "t": "2026-09-18T11:23:56.426Z",
+   "level": "info",
+   "msg": "[render] clip-1: wrote clip-1.mp4"
+  },
+  {
+   "t": "2026-09-18T11:24:00.489Z",
+   "level": "info",
+   "msg": "render: clip-1 variant starting — hook: I spent six hours on one short, and it got 40 views."
+  },
+  {
+   "t": "2026-09-18T11:24:01.999Z",
+   "level": "info",
+   "msg": "[lint] clip-1_v1: ok (1 warnings)"
+  },
+  {
+   "t": "2026-09-18T11:24:02.000Z",
+   "level": "info",
+   "msg": "[render] clip-1_v1: hyperframes render (30fps, standard, 1 worker)"
+  },
+  {
+   "t": "2026-09-18T11:27:11.214Z",
+   "level": "info",
+   "msg": "[render] clip-1_v1: wrote clip-1_v1.mp4"
+  },
+  {
+   "t": "2026-09-18T11:27:15.974Z",
+   "level": "info",
+   "msg": "render: clip-1 variant done → clip-1_v1.mp4"
+  },
+  {
+   "t": "2026-09-18T11:27:15.974Z",
+   "level": "info",
+   "msg": "render: clip-1 done → clip-1.mp4"
+  },
+  {
+   "t": "2026-09-18T11:27:17.571Z",
+   "level": "info",
+   "msg": "ai[package]: gemini/gemini-3.5-flash-lite ok in 2s"
+  },
+  {
+   "t": "2026-09-18T11:27:18.240Z",
+   "level": "info",
+   "msg": "package: metadata written for 1 clips (via gemini/gemini-3.5-flash-lite)"
+  },
+  {
+   "t": "2026-09-18T11:27:22.193Z",
+   "level": "info",
+   "msg": "qc: 1/1 clips passed"
+  },
+  {
+   "t": "2026-09-18T11:27:22.193Z",
+   "level": "info",
+   "msg": "pipeline complete in 483s — 1 clips"
+  },
+  {
+   "t": "2026-09-18T11:27:22.193Z",
+   "level": "info",
+   "msg": "pipeline complete"
+  }
+ ],
+ "media": {
+  "path": "/home/user/Syntheniq/apps/api/data-gemini/6f1f16e2-0d7a-49b0-bce3-db40b4873465/source.mp4",
+  "duration": 50,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "hasAudio": true,
+  "codec": "h264"
+ },
+ "transcript": {
+  "words": 144,
+  "segments": 15,
+  "coverage": 0.997,
+  "model": "faster-whisper small"
+ },
+ "analysis": {
+  "language": "en",
+  "tone": "neutral",
+  "topics": [
+   {
+    "start": 0,
+    "end": 11.88,
+    "title": "So three months ago, I made",
+    "summary": "So three months ago, I made a huge mistake with my editing workflow. I spent six hours on a single short, and it got 40 views. Um 40. That is the moment I decided to completely fix my process.",
+    "energy": 0.87,
+    "emotion": "neutral",
+    "importance": 0.2
+   },
+   {
+    "start": 14.14,
+    "end": 27.12,
+    "title": "The first thing that changed everything",
+    "summary": "The first thing that changed everything is that I stopped starting my videos with an intro. No more hey guys, welcome back. I just start mid-sentence with the most interesting part. It sounds simple, but it more than dou",
+    "energy": 0.76,
+    "emotion": "neutral",
+    "importance": 0.19
+   },
+   {
+    "start": 28.77,
+    "end": 40.89,
+    "title": "The second thing is captions. If",
+    "summary": "The second thing is captions. If a viewer cannot read your screen, they cannot follow you. Big text, two or three words at a time, and highlight the important words. People watch with a sound off all the time.",
+    "energy": 0.76,
+    "emotion": "neutral",
+    "importance": 0.14
+   },
+   {
+    "start": 43.04,
+    "end": 49.85,
+    "title": "If you fix just those two",
+    "summary": "If you fix just those two things, your retention will change completely. Try it for one week, and come back and thank me.",
+    "energy": 0.76,
+    "emotion": "neutral",
+    "importance": 0.08
+   }
+  ],
+  "keyphrases": [
+   {
+    "text": "time",
+    "times": [
+     26.78,
+     36.01,
+     40.57
+    ]
+   },
+   {
+    "text": "completely",
+    "times": [
+     10.44,
+     46.53
+    ]
+   },
+   {
+    "text": "cannot",
+    "times": [
+     30.95,
+     32.65
+    ]
+   },
+   {
+    "text": "three",
+    "times": [
+     0.16,
+     35.23
+    ]
+   },
+   {
+    "text": "thing",
+    "times": [
+     14.46,
+     29.07
+    ]
+   },
+   {
+    "text": "watch",
+    "times": [
+     26.5,
+     38.81
+    ]
+   },
+   {
+    "text": "words",
+    "times": [
+     35.47,
+     37.73
+    ]
+   },
+   {
+    "text": "back",
+    "times": [
+     20.34,
+     49.03
+    ]
+   },
+   {
+    "text": "fix",
+    "times": [
+     10.82,
+     43.26
+    ]
+   },
+   {
+    "text": "two",
+    "times": [
+     34.83,
+     44.04
+    ]
+   },
+   {
+    "text": "interesting",
+    "times": [
+     23.12
+    ]
+   },
+   {
+    "text": "everything",
+    "times": [
+     15.36
+    ]
+   }
+  ],
+  "deadAir": [
+   {
+    "start": 12.1,
+    "end": 14.16,
+    "reason": "silence"
+   },
+   {
+    "start": 27.24,
+    "end": 28.79,
+    "reason": "silence"
+   },
+   {
+    "start": 41.01,
+    "end": 43.07,
+    "reason": "silence"
+   },
+   {
+    "start": 44.86,
+    "end": 45.4,
+    "reason": "silence"
+   }
+  ],
+  "fillerNotes": "heuristic mode: filler removal is silence/filler-word based only",
+  "moments": [
+   {
+    "start": 0,
+    "end": 11.88,
+    "hook": 1,
+    "curiosity": 5,
+    "payoff": 5,
+    "standalone": 6,
+    "emotion": 9,
+    "visual": 5,
+    "reason": "heuristic: density+energy+position (score 0.20)"
+   },
+   {
+    "start": 14.14,
+    "end": 27.12,
+    "hook": 0,
+    "curiosity": 5,
+    "payoff": 5,
+    "standalone": 6,
+    "emotion": 8,
+    "visual": 5,
+    "reason": "heuristic: density+energy+position (score 0.19)"
+   },
+   {
+    "start": 28.77,
+    "end": 40.89,
+    "hook": 0,
+    "curiosity": 5,
+    "payoff": 5,
+    "standalone": 6,
+    "emotion": 8,
+    "visual": 5,
+    "reason": "heuristic: density+energy+position (score 0.14)"
+   },
+   {
+    "start": 43.04,
+    "end": 49.85,
+    "hook": 0,
+    "curiosity": 5,
+    "payoff": 5,
+    "standalone": 6,
+    "emotion": 8,
+    "visual": 5,
+    "reason": "heuristic: density+energy+position (score 0.08)"
+   }
+  ],
+  "visualNotes": "{\n \"frames\": []\n}"
+ },
+ "plan": {
+  "clipCount": 1,
+  "clips": [
+   {
+    "id": "clip-1",
+    "sourceStart": 0,
+    "sourceEnd": 49.85,
+    "hookText": "I made a huge mistake with my editing workflow.",
+    "segments": [
+     {
+      "start": 0,
+      "end": 11.9
+     },
+     {
+      "start": 14.14,
+      "end": 27.12
+     },
+     {
+      "start": 28.77,
+      "end": 40.89
+     },
+     {
+      "start": 43.04,
+      "end": 44.83
+     },
+     {
+      "start": 45.43,
+      "end": 49.85
+     }
+    ],
+    "punchIns": [
+     {
+      "time": 4.2,
+      "zoom": 1.18,
+      "reason": "six-hours setup"
+     },
+     {
+      "time": 8.2,
+      "zoom": 1.2,
+      "reason": "40-view reveal"
+     },
+     {
+      "time": 26.5,
+      "zoom": 1.12,
+      "reason": "watch-time payoff"
+     }
+    ],
+    "cutaways": [],
+    "callouts": [
+     {
+      "time": 4.2,
+      "text": "6 HOURS",
+      "style": "stat"
+     },
+     {
+      "time": 8.2,
+      "text": "40 VIEWS",
+      "style": "label"
+     },
+     {
+      "time": 26.5,
+      "text": "2X+ WATCH TIME",
+      "style": "stat"
+     }
+    ],
+    "cta": {
+     "text": "Try these two changes for one week.",
+     "style": "simple"
+    },
+    "music": "drive",
+    "energy": 0.8,
+    "thumbnail": {
+     "sourceTime": 8.2,
+     "text": "6 HOURS → 40 VIEWS"
+    },
+    "title": "Two Editing Changes: No Intros and Better Captions",
+    "variants": [
+     {
+      "hookText": "I spent six hours on one short, and it got 40 views.",
+      "title": "I Spent 6 Hours on a Short That Got 40 Views",
+      "note": "chronological alternate hook using the early failure setup"
+     }
+    ],
+    "motion": {
+     "style": {
+      "tempo": "energetic"
+     },
+     "cues": [
+      {
+       "kind": "emphasis",
+       "t": 3.2,
+       "intensity": 0.7,
+       "reason": "workflow mistake setup",
+       "text": "huge mistake",
+       "variant": "box"
+      },
+      {
+       "kind": "pulse",
+       "t": 4.2,
+       "intensity": 0.5,
+       "reason": "curiosity beat — a shift is coming"
+      },
+      {
+       "kind": "impact",
+       "t": 8.2,
+       "intensity": 1,
+       "reason": "40-view micro-payoff"
+      },
+      {
+       "kind": "emphasis",
+       "t": 10.44,
+       "intensity": 0.6,
+       "reason": "process-change commitment",
+       "text": "completely",
+       "variant": "box"
+      },
+      {
+       "kind": "emphasis",
+       "t": 14.46,
+       "intensity": 0.6,
+       "reason": "first actionable change",
+       "text": "first thing",
+       "variant": "tracking"
+      },
+      {
+       "kind": "impact",
+       "t": 26.5,
+       "intensity": 1,
+       "reason": "more-than-doubled watch-time payoff"
+      },
+      {
+       "kind": "emphasis",
+       "t": 29.07,
+       "intensity": 0.6,
+       "reason": "second actionable change",
+       "text": "captions",
+       "variant": "tracking"
+      },
+      {
+       "kind": "emphasis",
+       "t": 33.5,
+       "intensity": 0.6,
+       "reason": "caption readability principle",
+       "text": "cannot follow",
+       "variant": "underline"
+      },
+      {
+       "kind": "emphasis",
+       "t": 38.8,
+       "intensity": 0.6,
+       "reason": "sound-off viewing insight",
+       "text": "sound off",
+       "variant": "box"
+      }
+     ]
+    },
+    "retention": {
+     "architecture": "failure-hook-actionable-fixes-measured-payoff-fi",
+     "rationale": "The clip stays strictly chronological: it opens with the workflow failure, reveals the 40-view consequence, explains the two changes, delivers the doubled-watch-time result, and closes with a concrete one-week test.",
+     "beats": [
+      {
+       "t": 0.4,
+       "role": "hook",
+       "note": "A huge editing-workflow mistake creates immediate curiosity."
+      },
+      {
+       "t": 4.2,
+       "role": "curiosity",
+       "note": "Six hours spent on one short raises the stakes."
+      },
+      {
+       "t": 8.2,
+       "role": "micro-payoff",
+       "note": "The result is revealed: only 40 views."
+      },
+      {
+       "t": 14.46,
+       "role": "escalation",
+       "note": "The first concrete fix is introduced: stop starting with an intro."
+      },
+      {
+       "t": 26.5,
+       "role": "major-payoff",
+       "note": "The first change more than doubled watch time."
+      },
+      {
+       "t": 49.35,
+       "role": "satisfaction",
+       "note": "The viewer receives the complete second fix and a specific one-week action."
+      }
+     ]
+    },
+    "graphics": [
+     {
+      "type": "stat",
+      "t": 14.14,
+      "value": "2x",
+      "title": "multiplier",
+      "reason": "spoken \"double\" claim"
+     }
+    ]
+   }
+  ],
+  "notes": "Single chronological clip created because the second topic alone falls below the 20-second post-cut minimum once silence is removed. All dead-air ranges are omitted, and no teaser or reordered footage is used."
+ }
+}

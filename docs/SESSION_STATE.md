@@ -198,3 +198,14 @@
 ## Known limitations (accepted)
 - Heuristic-only mode (no AI keys): deterministic; AI path activates automatically when a key is set.
 - Cross-clip enumeration (a 2-point list split across two clips) is intentionally not synthesized.
+
+## 2026-09-18 — cross-provider model-family fix (post e9bbae9)
+Bug: global AI_MODEL (e.g. gpt-5.6-luna) was forwarded to *every* provider,
+so AI_PROVIDER=gemini + AI_MODEL=gpt-* 404'd all gemini calls (silent heuristic
+degradation). Fix: config.ts MODEL_FAMILY + modelFitsProvider — explicit models
+(per-task or AI_MODEL) are honored only when the model family matches the
+provider, else the provider's own tier default is used. router.ts applies the
+same check to REVIEW_MODEL. Regression: test/model-routing.mjs (20/20).
+Live proof (job 6f1f16e2, gemini primary, 500s, QC 1/1): gemini served
+package (gemini-3.5-flash-lite ok 2s) + review fell to openai + heuristic
+only when both providers throttled. Tests 66/66 total (20+15+22+9).

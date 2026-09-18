@@ -1,0 +1,215 @@
+{
+ "clipId": "clip-1",
+ "fps": 30,
+ "totalDur": 43.21,
+ "segments": [
+  {
+   "file": "seg-000.mp4",
+   "compStart": 0,
+   "compDur": 11.9,
+   "srcStart": 0,
+   "srcEnd": 11.9
+  },
+  {
+   "file": "seg-001.mp4",
+   "compStart": 11.9,
+   "compDur": 12.98,
+   "srcStart": 14.14,
+   "srcEnd": 27.12
+  },
+  {
+   "file": "seg-002.mp4",
+   "compStart": 24.88,
+   "compDur": 12.12,
+   "srcStart": 28.77,
+   "srcEnd": 40.89
+  },
+  {
+   "file": "seg-003.mp4",
+   "compStart": 37,
+   "compDur": 1.79,
+   "srcStart": 43.04,
+   "srcEnd": 44.83
+  },
+  {
+   "file": "seg-004.mp4",
+   "compStart": 38.79,
+   "compDur": 4.42,
+   "srcStart": 45.43,
+   "srcEnd": 49.85
+  }
+ ],
+ "cutaways": [],
+ "punchIns": [
+  {
+   "compTime": 4.2,
+   "zoom": 1.18
+  },
+  {
+   "compTime": 8.2,
+   "zoom": 1.2
+  },
+  {
+   "compTime": 24.259999999999998,
+   "zoom": 1.12
+  }
+ ],
+ "callouts": [
+  {
+   "compTime": 4.2,
+   "text": "6 HOURS",
+   "style": "stat"
+  },
+  {
+   "compTime": 8.2,
+   "text": "40 VIEWS",
+   "style": "label"
+  },
+  {
+   "compTime": 24.259999999999998,
+   "text": "2X+ WATCH TIME",
+   "style": "stat"
+  }
+ ],
+ "hookText": "I made a huge mistake with my editing workflow.",
+ "ctaText": "Try these two changes for one week.",
+ "music": "drive",
+ "energy": 0.8,
+ "audioFile": "mixed.m4a",
+ "motion": [
+  {
+   "kind": "emphasis",
+   "t": 3.2,
+   "intensity": 0.7,
+   "reason": "workflow mistake setup",
+   "text": "huge mistake",
+   "variant": "box"
+  },
+  {
+   "kind": "pulse",
+   "t": 4.2,
+   "intensity": 0.5,
+   "reason": "curiosity beat — a shift is coming"
+  },
+  {
+   "kind": "impact",
+   "t": 8.2,
+   "intensity": 1,
+   "reason": "40-view micro-payoff"
+  },
+  {
+   "kind": "emphasis",
+   "t": 10.44,
+   "intensity": 0.6,
+   "reason": "process-change commitment",
+   "text": "completely",
+   "variant": "box"
+  },
+  {
+   "kind": "transition",
+   "t": 11.9,
+   "variant": "flash",
+   "reason": "segment boundary (gap 2.24s)"
+  },
+  {
+   "kind": "emphasis",
+   "t": 12.22,
+   "intensity": 0.6,
+   "reason": "first actionable change",
+   "text": "first thing",
+   "variant": "tracking"
+  },
+  {
+   "kind": "impact",
+   "t": 24.259999999999998,
+   "intensity": 1,
+   "reason": "more-than-doubled watch-time payoff"
+  },
+  {
+   "kind": "transition",
+   "t": 24.88,
+   "variant": "flash",
+   "reason": "segment boundary (gap 1.65s)"
+  },
+  {
+   "kind": "drift",
+   "t": 24.88,
+   "dur": 12.12,
+   "intensity": 0.035,
+   "variant": "push",
+   "reason": "subtle camera push"
+  },
+  {
+   "kind": "emphasis",
+   "t": 25.18,
+   "intensity": 0.6,
+   "reason": "second actionable change",
+   "text": "captions",
+   "variant": "tracking"
+  },
+  {
+   "kind": "emphasis",
+   "t": 29.61,
+   "intensity": 0.6,
+   "reason": "caption readability principle",
+   "text": "cannot follow",
+   "variant": "underline"
+  },
+  {
+   "kind": "emphasis",
+   "t": 34.91,
+   "intensity": 0.6,
+   "reason": "sound-off viewing insight",
+   "text": "sound off",
+   "variant": "box"
+  },
+  {
+   "kind": "transition",
+   "t": 37,
+   "variant": "flash",
+   "reason": "segment boundary (gap 2.15s)"
+  },
+  {
+   "kind": "drift",
+   "t": 37,
+   "dur": 1.79,
+   "intensity": 0.025,
+   "variant": "push",
+   "reason": "subtle camera push"
+  },
+  {
+   "kind": "transition",
+   "t": 38.79,
+   "variant": "wipe",
+   "reason": "segment boundary (gap 0.60s)"
+  },
+  {
+   "kind": "drift",
+   "t": 38.79,
+   "dur": 4.42,
+   "intensity": 0.025,
+   "variant": "push",
+   "reason": "subtle camera push"
+  },
+  {
+   "kind": "settle",
+   "t": 40.61,
+   "dur": 2.6,
+   "intensity": 0.02,
+   "reason": "settle into CTA"
+  }
+ ],
+ "motionStyle": {
+  "tempo": "energetic"
+ },
+ "graphics": [
+  {
+   "type": "stat",
+   "t": 14.14,
+   "value": "2x",
+   "title": "multiplier",
+   "reason": "spoken \"double\" claim",
+   "compTime": 11.9
+  }
+ ]
+}
