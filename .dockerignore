@@ -1,0 +1,17 @@
+# keep the build context small and secret-free
+.git
+**/node_modules
+**/.cache
+**/.next
+data
+data-gemini
+*.tar.xz
+*.zip
+# media — not needed at runtime (test source & outputs)
+*.mp4
+*.wav
+# local-only env (keys never go into the image)
+.env
+.env.*
+!.env.example
+swapfile

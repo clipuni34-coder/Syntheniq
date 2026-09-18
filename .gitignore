@@ -17,3 +17,7 @@ tools/models
 tools/tts
 tools/*.mp4
 tools/*.wav
+
+# all runtime data dirs (data, data-gemini, future side instances)
+data
+[data]-*

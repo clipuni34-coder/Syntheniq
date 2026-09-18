@@ -1,5 +1,6 @@
 import {
   DEFAULT_MODELS,
+  modelFitsProvider,
   modelForTask,
   providerKeyPresent,
   type AiConfig,
@@ -125,7 +126,12 @@ export class AiRouter {
     const chain = this.reviewChain(producedBy ?? undefined);
     const errors: string[] = [];
     for (const p of chain) {
-      const model = this.cfg.reviewModel || modelForTask(this.cfg, task, p);
+      // review model is only honored when its family matches this provider,
+      // otherwise fall through to modelForTask (which family-checks too)
+      const model =
+        this.cfg.reviewModel && modelFitsProvider(this.cfg.reviewModel, p)
+          ? this.cfg.reviewModel
+          : modelForTask(this.cfg, task, p);
       try {
         const result = await this.invoke(p, req, model);
         this.log(`review[${task}]: ${p}/${model} ok`);
