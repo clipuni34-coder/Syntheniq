@@ -1,0 +1,26 @@
+{
+  "name": "Syntheniq — full pipeline (>= 4 cores / 8 GB)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Syntheniq — open this HTTPS URL on your iPhone",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "tmux new-session -d -s syntheniq 'bash /repo/scripts/start-codespaces.sh' || echo 'auto-start failed — in a terminal run: bash /repo/scripts/start-codespaces.sh'",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "python3"
+      }
+    }
+  }
+}
