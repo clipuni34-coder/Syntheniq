@@ -26,14 +26,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 #   libnss3/libgbm1/… the exact system libraries the headless Chrome
 #                     HyperFrames uses to render (verified against the
 #                     official CLI's missing-library report;
-#                     libasound2t64 = bookworm's time_t64 name)
+#                     libasound2 = bookworm's package — libasound2t64 is
+#                     Debian trixie (13)/Ubuntu 24.04, NOT bookworm (12);
+#                     fixed from libasound2t64 which 404'd on build)
 #   tmux              keeps the server alive after container setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg python3 python3-pip fonts-dejavu ca-certificates \
       curl unzip tmux \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
       libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 \
-      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /repo
