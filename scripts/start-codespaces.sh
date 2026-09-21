@@ -97,7 +97,16 @@ if [ -x node_modules/.bin/hyperframes ]; then
 else
   echo "  hyperframes : FAIL — run: npm ci"; FAIL=1
 fi
-[ -f apps/api/dist/server.js ] && echo "  api build   : ok" || { echo "  api build   : FAIL — run: npm run build:api"; FAIL=1; }
+  # Rebuild API dist if it is missing OR any source is newer than the build.
+  # Prevents the "stale pre-fix dist still running" regression on Codespaces
+  # resume (old mediaDur-denominator coverage gate) when build:api is not re-run
+  # after `git pull`.
+  if [ ! -f apps/api/dist/server.js ] || find apps/api/src -type f -newer apps/api/dist/server.js -print -quit 2>/dev/null | grep -q .; then
+    echo "  api build   : rebuilding dist (missing or source newer)…"
+    if ! npm run build:api; then echo "  api build   : FAIL — run: npm run build:api"; FAIL=1; fi
+  else
+    echo "  api build   : ok (fresh)"
+  fi
 [ -f "$WEB_OUT_DIR/index.html" ] && echo "  web build   : ok" || { echo "  web build   : FAIL — run: npm run build:web"; FAIL=1; }
 
 if [ "$FAIL" -eq 0 ]; then
