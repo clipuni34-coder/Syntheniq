@@ -27,11 +27,7 @@ ENSURE_ONLY=0
 
 PORT="${PORT:-3000}"
 export PORT
-if [ -z "${SYNTHENIQ_DATA:-}" ] && [ -d /workspaces/Syntheniq ]; then
-  export SYNTHENIQ_DATA=/workspaces/Syntheniq/.syntheniq-data
-else
-  export SYNTHENIQ_DATA="${SYNTHENIQ_DATA:-$HOME/syntheniq-data}"
-fi
+export SYNTHENIQ_DATA="${SYNTHENIQ_DATA:-$HOME/syntheniq-data}"
 export SYNTHENIQ_PASSWORD="${SYNTHENIQ_PASSWORD:-syntheniq-2026}"
 export SYNTHENIQ_WHISPER_MODEL="${SYNTHENIQ_WHISPER_MODEL:-small}"
 export NODE_ENV="${NODE_ENV:-production}"
@@ -133,9 +129,6 @@ if [ "$ENSURE_ONLY" -eq 1 ]; then
   exit 0
 fi
 
-if curl -s -o /dev/null -m 2 "http://127.0.0.1:$PORT/health"; then
-  echo "server already listening on $PORT — attach only"; exit 0
-fi
 echo "════════════════════════════════════════════════════"
 echo "  Syntheniq starting on http://0.0.0.0:$PORT"
 echo "  data dir  : $SYNTHENIQ_DATA"

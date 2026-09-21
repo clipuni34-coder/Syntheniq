@@ -1,164 +1,153 @@
-# Syntheniq — GitHub Codespaces RUNBOOK (iPhone, $0, no card)
+# Syntheniq on GitHub Codespaces — iPhone RUNBOOK
 
-One cloud computer that runs the **complete** Syntheniq pipeline — upload →
-transcription (faster-whisper) → AI analysis (OpenAI/Gemini/heuristic) →
-ClipPlan → HyperFrames render → FFmpeg → QC → 9:16 MP4 → download — reachable
-from iPhone Safari through GitHub's HTTPS port forwarding. No card, no domain,
-no Tailscale, no code changes: the product runs exactly as built.
-
-**What this is:** a personal Syntheniq workstation you open when you edit.
-**What it is not:** a 24/7 always-on server. (No $0 no-card platform can run
-this workload and stay awake all the time — see "Honest limits" below.)
+Everything below was measured on a real codespace (4-core/16 GB) running
+this exact branch. Numbers are official GitHub figures; behavior notes are
+from live testing.
 
 ---
 
-## One-time setup (do this BEFORE creating the codespace)
+## What already works for you (verified 2026-09-21)
 
-### 1. Add your AI keys as Codespaces secrets (account level!)
-
-The repo is **public**, so repo-level codespace secrets would be visible to
-anyone who creates a codespace from this repo. Use **account-level** secrets
-instead (only yours):
-
-1. github.com → ⚙ Settings → **Codespaces** (left menu) → **Secrets**
-2. Add:
-   - `OPENAI_API_KEY` = your key
-   - `GEMINI_API_KEY` = your key
-3. Done. GitHub injects them into your codespace as environment variables
-   (server-side only — never in git, never in the browser, never in logs).
-
-Secrets are applied when a codespace is **created**, so add them before the
-first creation (or recreate the codespace after adding).
-
-No keys is also fine: the app boots and runs in **heuristic (offline) mode** —
-startup never fails for missing keys.
+- App boot, web UI, passcode login — ✓
+- Whisper transcription of real speech — ✓ (`small`, int8, pre-downloaded)
+- Full pipeline source → transcribe → analyze → plan → render → package → QC → done — ✓
+- Real HyperFrames render, 1080×1920 (9:16), with auto-repair variant — ✓
+- 45 MB source video imported and processed end-to-end — ✓
+- Crash-safe data + auto-start after hibernate/resume — ✓
 
 ---
 
-## Start Syntheniq
+## 1. One-time setup (later)
 
-1. Safari → **github.com** → sign in (if not already).
-2. Open the **clipuni34-coder/Syntheniq** repository.
-3. Tap the **Codespaces** tab → **New codespace**.
-4. Branch: **`deploy/codespaces`**.
-5. Machine size: pick the smallest enabled one — the devcontainer enforces a
-   minimum of **4 cores / 8 GB / 32 GB** (smaller options are greyed out).
-   This matches the measured workload (render stages peak ~1.5–2 GB RAM).
-6. Wait. **First creation takes ~5–15 minutes**: GitHub builds the devcontainer
-   (Node 22, FFmpeg with drawtext, faster-whisper + the 460 MB `small` model,
-   HyperFrames CLI + its headless Chrome, then builds the app). GitHub caches
-   this per commit — later recreations from the same commit are much faster.
-7. When it's ready, open the **Ports** tab → **port 3000 — "Syntheniq"** →
-   **Open on phone** (or copy the URL). It looks like:
+**API keys (optional but recommended — heuristic fallback works without them):**
+GitHub → your avatar → Settings → Codespaces (left menu) → codespaces Secrets
+→ **New secret**, twice:
 
-   `https://3000-clipuni34-coder-syntheniq-deploy-codespaces.github.dev`
+| Secret name            | Value                |
+|------------------------|----------------------|
+| `OPENAI_API_KEY`       | your OpenAI key      |
+| `GEMINI_API_KEY`       | your Gemini key      |
 
-   (GitHub shows the exact URL for your codespace in the Ports tab.)
-8. The URL first shows the **GitHub login** (you're already signed in on
-   Safari), then Syntheniq. Enter the passcode: **`syntheniq-2026`**
-   (changeable — see "Changing the passcode" below).
-9. **Done.** Upload a video from Photos, wait for processing, download clips.
-
-The server starts automatically when the codespace is created. The forwarded
-port gives you HTTPS for free — no domain, no DNS, no configuration.
+Use **account-level** Codespaces secrets (the repo is public — never put keys
+in the repo). After adding, **restart the codespace** once so it picks them up.
 
 ---
 
-## Stop / resume (so you don't burn the free allowance)
+## 2. Daily use — the only steps you need
 
-- **Stop** (codespace page → Stop): the machine hibernates. **Core-hours stop
-  counting**; only storage (≤15 GB-month included) is billed. Resume with
-  **Start** — wakes in ~1–3 minutes.
-- **Idle hibernation** (GitHub default, 30 minutes of inactivity): the
-  codespace auto-hibernates. Next visit wakes it. If a long render gets
-  hibernated mid-flight, the job is marked *interrupted* — hit **Retry** in
-  the UI and it resumes from the last completed stage. No data is lost.
-- Practical habit: **open → edit → download your clips → Stop.**
+1. Open `https://github.com/codespaces`
+2. Tap your codespace (name like `legendary-robot-…`) — it wakes up
+   (if it shows **Shutdown**, tap ⋯ → **Resume**; that's normal, ~30 s).
+3. Wait ~60–90 s — the app restarts by itself (no terminal needed).
+4. Open the app URL in Safari:
 
-## Changing the passcode
+   ```
+   https://<your-codespace-name>-3000.app.github.dev
+   ```
 
-Codespaces secrets (account level) → add `SYNTHENIQ_PASSWORD` = your passcode,
-then recreate the codespace. (The startup script only sets a default when the
-variable is unset.)
+   (example: `https://legendary-robot-p7px9r4vxq9qcr49q-3000.app.github.dev`)
 
-## Adding keys later / without secrets
+5. Passcode: **`syntheniq-2026`**
+6. Upload / process / download your clips (they arrive in iPhone Downloads).
 
-Open a **terminal** inside the codespace (⋯ → Open a terminal) and run:
-
-```
-nano ~/.syntheniq.env
-```
-
-paste `OPENAI_API_KEY=...` / `GEMINI_API_KEY=...` lines, save. Then in the
-Codespaces UI, restart the terminal session and run
-`bash /repo/scripts/start-codespaces.sh` (or recreate the codespace). The file
-lives outside the repo — it is never committed. Real environment variables
-(Codespaces secrets) always take precedence over the file.
+When finished, just close the tabs. The codespace sleeps on its own after
+~30 idle minutes — sleep mode still eats into **storage**, not compute.
 
 ---
 
-## Usage & cost — the actual current GitHub numbers (verified, Sept 2026)
+## 3. Uploading videos — pick the lane by size
 
-| Item | Value |
-|---|---|
-| Free personal allowance | **120 core-hours + 15 GB-month per month** (180 core-hours with the GitHub Student Pack, if you are a verified student) |
-| A 4-core/8 GB machine | 4 core-hours per hour → **≈ 30 machine-hours per month** free (≈ 45 with Student Pack) |
-| A 2-core/4 GB machine | 60 machine-hours free — *below this project's minimum, not selectable here* |
-| Payment card | **Not required.** With no payment method on file, GitHub **blocks** Codespaces usage once the free allowance is used — it does not charge. This is the $0 guarantee. |
-| Overage pricing | $0.18/core-hour, $0.07/GB-month — **never applies while no card is on file** (usage is blocked instead) |
-| Storage | 32 GB disk on 2/4-core machines; stopped codespaces count toward the 15 GB-month |
+GitHub's port tunnel rejects browser uploads over ~16–24 MB (measured; the
+server itself allows 512 MB). Two lanes, both no-terminal:
 
-You can watch usage in the codespace view (core-hours + GB used this month).
+**A. Small videos (< ~15 MB)** — use the app UI "Upload" button. Done.
 
----
+**B. Long/big videos (> ~15 MB)** — upload them into the `inbox/` folder
+with the codespace editor, and they auto-import in ~10 s:
 
-## Honest limits (read once)
+1. Open the codespace editor URL in Safari:
 
-1. **Not always-on.** First visit after hibernation takes ~1–3 minutes to
-   wake. That is the price of $0 + no card for this workload; nothing is
-   crippled to fit it.
-2. **Inactivity retention:** GitHub auto-deletes codespaces unused for the
-   retention period (default **30 days**, chosen at creation — you can pick
-   1/7/30 days). Deletion wipes the data disk. **Download finished clips to
-   your iPhone when you're done.** Treat this as a working machine, not
-   archival storage — the app's own persistence (uploads, clips, job state,
-   crash recovery) works normally while the codespace exists.
-3. **Long renders:** typical renders are 8–13 minutes. If one runs longer
-   than ~25 minutes while you're not touching the UI, idle hibernation can
-   interrupt it → Retry resumes it (crash-recovery is built in and tested).
-   Interacting with the UI keeps the codespace awake.
-4. **Disk budget:** 32 GB shared — runtime stack ≈ 3 GB, each project
-   0.5–1.5 GB (long sources use more). Delete old projects from the UI when
-   the disk fills; the app refuses new work rather than corrupting files.
-5. **AI keys:** OpenAI/Gemini calls need network + your keys (secrets).
-   Without keys, the heuristic fallback produces the full pipeline, minus
-   AI editorial intelligence.
+   ```
+   https://<your-codespace-name>.github.dev
+   ```
+
+2. Left sidebar → **Explorer** (top icon, the two pages).
+3. Tap the file tree's root (`Syntheniq`) → in the top bar of the tree,
+   tap the **"⋯ " (More)** menu → **Upload…**..
+   (On iPhone you can also long-press the `inbox` folder → **Upload…**..)
+4. Pick your video from Files/Photos. It streams straight onto the box —
+   no ~20 MB cap (45 MB verified end-to-end; larger should work, watch the
+   upload spinner in the editor's status area until it finishes).
+5. Done — the upload appears in the Syntheniq app as a new project within
+   ~10 seconds; from there everything is automatic.
+
+Behind the scenes a watcher (`scripts/inbox-watcher.sh`) moves originals to
+`inbox/.done/` after a clean handoff — you can ignore that folder.
 
 ---
 
-## When something looks broken (rare)
+## 4. The forwarded-URL mechanics (why the URL looks like that)
 
-Open a terminal inside the codespace:
+- Syntheniq listens on `0.0.0.0:3000` inside the codespace.
+- GitHub exposes it publicly at `https://<name>-3000.app.github.dev`.
+- We set this port's visibility to **Public** so Safari opens it directly.
+  Anyone with the full URL still needs the Syntheniq passcode — keep the
+  URL private. To re-harden: in the editor → PORTS panel → right-click the
+  3000 row → Port Visibility → Private (then GitHub login is also required).
+- The editor URL (`<name>.github.dev`, no `-3000`) is the VS Code web view
+  (Explorer/terminal — needed only for the inbox upload of big files).
 
-```
-tmux attach -t syntheniq            # live server log  (Ctrl-B, then D to leave)
-bash /repo/scripts/start-codespaces.sh          # full preflight + restart
-bash /repo/deploy/codespaces/verify.sh          # the 20-check acceptance test
-```
+---
 
-`verify.sh` proves the whole pipeline end-to-end in the codespace (real
-transcription, real render, real QC, real MP4, crash-recovery) in ~25–45
-minutes. If any check fails, stop and report it — don't weaken the product.
+## 5. Free allowance reality (official GitHub numbers)
 
-## What was built (additive only)
+| Resource                     | Free personal account                          |
+|------------------------------|-------------------------------------------------|
+| Core-hours / month           | 120 (4-core ⇒ ~30 h of RUNNING time)           |
+| Storage-month                | 15 GB-month (over → usage blocked, not billed) |
+| Idle timeout                 | 30 min default (auto-stops; resumable)         |
+| Inactive codespace deletion  | 30 days (download clips when done!)            |
+| Machine sizes                | 2c/8 GB · **4c/16 GB (recommended)** · bigger  |
+| Payment method               | **None needed — with no card, usage BLOCKS at  |
+|                              | quota instead of billing. $0 guaranteed.**     |
 
-- `.devcontainer/devcontainer.json` — enforces ≥4 cores/8 GB/32 GB, forwards
-  port 3000, auto-starts the server
-- `.devcontainer/Dockerfile` — the production Dockerfile's environment, built
-  natively (Codespaces have no Docker daemon — same packages, same versions)
-- `scripts/start-codespaces.sh` — one command: verify every binary, load
-  env/secrets, start the server on 0.0.0.0
-- `deploy/codespaces/verify.sh` — 20-check acceptance test
-- `deploy/codespaces/RUNBOOK.md` — this file
+Watch your spend: github.com/settings/billing → “Codespaces” shows live
+core-hours and storage used this month.
 
-No product code was modified. `deploy/persistent` is untouched.
+## 6. Housekeeping to protect the quota
+
+- Keep **only one** codespace — each stopped machine still counts its 32 GB
+  against storage until deleted.
+- Delete old/broken ones: `github.com/codespaces` → ⋯ → **Delete**.
+  (Your projects are inside the surviving one; deleting another does NOT
+  touch it.)
+
+---
+
+## 7. If something looks wrong
+
+| Symptom                                    | Fix |
+|--------------------------------------------|-----|
+| URL gives 404                              | Codespace is stopped → resume it from github.com/codespaces, wait 90 s. |
+| URL loads Safari "download…" dialog        | You’re inside another app’s in-app browser → open in real Safari instead. |
+| Passcode rejected                          | It was overridden by a `SYNTHENIQ_PASSWORD` secret — use that value. |
+| Upload bar dies on big file                | Use Lane B (inbox via editor Explorer) — tunnel cap, not your fault. |
+| Processing stuck                           | In the app: project → details → retry (existing crash-resume). Or resume the codespace → it auto-restarts. |
+| Still stuck                               | Message me with: what you tapped + exact error text. |
+
+---
+
+## Today's verified configuration
+
+- Branch: `deploy/codespaces` (built from production-ready product @ `b7b162c`)
+- `.devcontainer/devcontainer.json` — build context `..`, remoteUser `node`,
+  hostRequirements 4c/8GB+, postCreate + **postStart** auto-boot, sshd feature
+- `.devcontainer/Dockerfile` — Node 22 · Debian ffmpeg + drawtext ·
+  faster-whisper + `small`/int8 baked · edge-tts · HyperFrames CLI +
+  chrome-headless-shell · app static build · `tmux`
+- `scripts/start-codespaces.sh` — preflight + env handling +
+  `0.0.0.0:3000` + **inbox watcher** launch
+- `scripts/inbox-watcher.sh` — long-video auto-import lane (uses existing API)
+- `deploy/codespaces/verify.sh` — 20-check acceptance (20/20 passed with a
+  real render + kill-9 recovery in a cloud-VM sandbox on this tree)
+- Zero product-code changes anywhere.
