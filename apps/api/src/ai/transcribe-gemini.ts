@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Segment, Transcript } from '../pipeline/types.js';
+import { detectSilences } from '../pipeline/media.js';
+import { computeCoverage } from '../pipeline/transcribe.js';
 import { AiError } from './types.js';
 
 const pexecFile = promisify(execFile);
@@ -63,13 +65,24 @@ export async function transcribeGemini(
   }
 
   const grouped = groupWordsToSegments(segments);
-  const lastEnd = grouped.length ? grouped[grouped.length - 1].end : 0;
-  const coverage = mediaDur > 0 ? Math.min(1, lastEnd / mediaDur) : 0;
-  if (coverage < 0.95) {
-    throw new AiError(`gemini transcript coverage ${Math.round(coverage * 100)}% < 95%`, true);
+  const transcript: Transcript = { duration: mediaDur, language: language || 'en', segments: grouped };
+  const silences = await detectSilences(wav, mediaDur);
+  const trailing =
+    silences.length && silences[silences.length - 1].end >= mediaDur - 0.05
+      ? mediaDur - silences[silences.length - 1].start
+      : 0;
+  const cov = computeCoverage(transcript, mediaDur, trailing);
+  log(
+    `[transcribe:gemini] coverage gate: mediaDur=${mediaDur.toFixed(2)}s firstWord=${cov.firstStart.toFixed(2)}s ` +
+      `lastWord=${cov.lastEnd.toFixed(2)}s trailingSilence=${cov.trailingSilence.toFixed(2)}s ` +
+      `speechEnd=${cov.speechEnd.toFixed(2)}s coverage=${Math.round(cov.coverage * 100)}% ` +
+      `threshold=${Math.round(cov.threshold * 100)}% -> ${cov.reason}`,
+  );
+  if (!cov.passed) {
+    throw new AiError(`gemini transcript coverage ${Math.round(cov.coverage * 100)}% < 95% — ${cov.reason}`, true);
   }
-  log(`[transcribe:gemini] done: ${grouped.length} segments, coverage ${(coverage * 100).toFixed(0)}%`);
-  return { duration: mediaDur, language: language || 'en', segments: grouped };
+  log(`[transcribe:gemini] done: ${grouped.length} segments, coverage ${(cov.coverage * 100).toFixed(0)}%`);
+  return transcript;
 }
 
 // ── Files API (resumable upload) ────────────────────────────────────────

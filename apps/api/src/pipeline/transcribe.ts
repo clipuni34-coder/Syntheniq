@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { ROOT, WHISPER_MODEL } from '../config.js';
+import { detectSilences } from './media.js';
 import type { Transcript } from './types.js';
 
 const pexecFile = promisify(execFile);
@@ -37,6 +38,76 @@ function markFillers(t: Transcript): Transcript {
     w.isFiller = FILLER.has(w.word.toLowerCase().replace(/[^a-z]/gi, ''));
   }
   return t;
+}
+
+export interface CoverageResult {
+  lastEnd: number;
+  firstStart: number;
+  trailingSilence: number;
+  speechEnd: number;
+  denominator: number;
+  coverage: number;
+  threshold: number;
+  passed: boolean;
+  reason: string;
+}
+
+/**
+ * Coverage gate (PRODUCT.md): a transcription is "complete" when it covers
+ * >=95% of the SPEECH span — media duration MINUS trailing silence. Whisper
+ * (with VAD) stops at end-of-speech, so the silent tail at the end of the
+ * audio is expected and must be excluded from the denominator; using full
+ * mediaDur as the denominator fails otherwise-complete transcripts whose
+ * only "gap" is natural trailing silence. Word-level end timestamps are used
+ * for precision (segment `end` may carry trailing pad).
+ */
+export function computeCoverage(
+  transcript: Transcript,
+  mediaDur: number,
+  trailingSilence = 0,
+): CoverageResult {
+  const wordEnds: number[] = [];
+  const wordStarts: number[] = [];
+  for (const s of transcript.segments) {
+    for (const w of s.words) {
+      wordEnds.push(w.end);
+      wordStarts.push(w.start);
+    }
+  }
+  const lastEnd =
+    wordEnds.length
+      ? Math.max(...wordEnds)
+      : transcript.segments.length
+        ? Math.max(...transcript.segments.map((s) => s.end))
+        : 0;
+  const firstStart =
+    wordStarts.length
+      ? Math.min(...wordStarts)
+      : transcript.segments.length
+        ? Math.min(...transcript.segments.map((s) => s.start))
+        : 0;
+  const silence = Math.max(0, Math.min(trailingSilence, mediaDur));
+  const speechEnd = Math.max(0, mediaDur - silence);
+  const denominator = speechEnd > 0 ? speechEnd : mediaDur;
+  const coverage = denominator > 0 ? Math.min(1, lastEnd / denominator) : 0;
+  const threshold = 0.95;
+  const pct = Math.round(coverage * 100);
+  const tpct = Math.round(threshold * 100);
+  const passed = coverage >= threshold;
+  const reason = passed
+    ? `coverage ${pct}% >= ${tpct}%`
+    : `coverage ${pct}% < ${tpct}% (last word ${lastEnd.toFixed(2)}s over speech-end ${speechEnd.toFixed(2)}s; mediaDur ${mediaDur.toFixed(2)}s, trailing silence ${silence.toFixed(2)}s, words ${wordEnds.length})`;
+  return {
+    lastEnd,
+    firstStart,
+    trailingSilence: silence,
+    speechEnd,
+    denominator,
+    coverage,
+    threshold,
+    passed,
+    reason,
+  };
 }
 
 /**
@@ -94,13 +165,21 @@ export async function transcribeLocal(wav: string, mediaDur: number, log: (m: st
     })),
   };
 
-  const lastEnd = transcript.segments.length ? Math.max(...transcript.segments.map((s) => s.end)) : 0;
-  const coverage = mediaDur > 0 ? Math.min(1, lastEnd / mediaDur) : 0;
-  if (coverage < 0.95) {
-    throw new Error(
-      `transcript coverage ${Math.round(coverage * 100)}% < 95% (last word ${lastEnd.toFixed(1)}s / ${mediaDur.toFixed(1)}s) — per product spec the job is incomplete`,
-    );
+  const silences = await detectSilences(wav, mediaDur);
+  const trailing =
+    silences.length && silences[silences.length - 1].end >= mediaDur - 0.05
+      ? mediaDur - silences[silences.length - 1].start
+      : 0;
+  const cov = computeCoverage(transcript, mediaDur, trailing);
+  log(
+    `[transcribe] coverage gate: mediaDur=${mediaDur.toFixed(2)}s firstWord=${cov.firstStart.toFixed(2)}s ` +
+      `lastWord=${cov.lastEnd.toFixed(2)}s trailingSilence=${cov.trailingSilence.toFixed(2)}s ` +
+      `speechEnd=${cov.speechEnd.toFixed(2)}s covered=${cov.lastEnd.toFixed(2)}s ` +
+      `coverage=${Math.round(cov.coverage * 100)}% threshold=${Math.round(cov.threshold * 100)}% -> ${cov.reason}`,
+  );
+  if (!cov.passed) {
+    throw new Error(`transcript coverage ${Math.round(cov.coverage * 100)}% < 95% — ${cov.reason}`);
   }
-  log(`[transcribe] done: ${transcript.segments.length} segments, coverage ${(coverage * 100).toFixed(0)}%, lang=${transcript.language}`);
+  log(`[transcribe] done: ${transcript.segments.length} segments, coverage ${(cov.coverage * 100).toFixed(0)}%, lang=${transcript.language}`);
   return transcript;
 }

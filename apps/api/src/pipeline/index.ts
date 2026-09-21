@@ -5,7 +5,7 @@ import { loadAiConfig } from '../config.js';
 import { AiRouter } from '../ai/router.js';
 import type { Analysis, ClipState, JobState, MediaInfo, Plan, Transcript } from './types.js';
 import { energyBuckets, extractAudioWav16k, ffprobe, framePng, makeThumbnail, mediaSignals } from './media.js';
-import { transcribeAuto } from './transcribe.js';
+import { computeCoverage, transcribeAuto } from './transcribe.js';
 import { runAnalyze } from './analyze.js';
 import { runPlan } from './plan.js';
 import { prepClipMedia, type CompSpec } from './prep.js';
@@ -66,13 +66,18 @@ export async function runPipeline(job: Job, projectDir: string): Promise<void> {
     transcriptProvider = t.provider;
     await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 1));
   }
+  const signals = await mediaSignals(wav, media.duration);
+  const trailing =
+    signals.silences.length && signals.silences[signals.silences.length - 1].end >= media.duration - 0.05
+      ? media.duration - signals.silences[signals.silences.length - 1].start
+      : 0;
+  const coverage = computeCoverage(transcript, media.duration, trailing).coverage;
   job.setTranscript({
     words: transcript.segments.reduce((a, s) => a + s.words.length, 0),
     segments: transcript.segments.length,
-    coverage: transcript.segments.length ? Math.min(1, Math.max(...transcript.segments.map((s) => s.end)) / media.duration) : 0,
+    coverage,
     model: transcriptProvider || `faster-whisper ${process.env.SYNTHENIQ_WHISPER_MODEL || 'small'}`,
   });
-  const signals = await mediaSignals(wav, media.duration);
   router.signals = { transcript, media, silences: signals.silences, energy: signals.energy };
   log('info', `signals: ${signals.silences.length} silences, ${signals.energy.length} energy buckets`);
   await checkCancelled(job);
