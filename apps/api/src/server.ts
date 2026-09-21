@@ -236,6 +236,14 @@ try {
   });
 } catch {
   app.log.warn(`web out dir not found at ${WEB_OUT_DIR} — API only mode`);
+  app.setNotFoundHandler(async (req, reply) => {
+    const p = req.url.split('?')[0];
+    if (p.startsWith('/v1') || req.method !== 'GET') return reply.code(404).send({ error: 'not found' });
+    reply.code(200).header('content-type', 'text/html; charset=utf-8').send(
+      `<html><body style="font-family:system-ui;background:#070809;color:#f5f7f8;display:grid;place-items:center;height:100vh"><div style="text-align:center"><h2>Syntheniq API is running</h2><p>Web build not found (expected at ${WEB_OUT_DIR}). Run npm run build:web on the Codespace to serve the full UI.</p></div></body></html>`
+    );
+  });
+
 }
 
 // ── startup reconcile (crash-consistency) ──────────────────────────────
