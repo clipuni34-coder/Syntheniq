@@ -25,8 +25,14 @@ cd "$REPO"
 ENSURE_ONLY=0
 [ "${1:-}" = "--ensure-only" ] && ENSURE_ONLY=1
 
-PORT="${PORT:-3000}"
-export PORT
+# Codespace forwards port 3000 (devcontainer.json forwardPorts). The base image
+# exports PORT=8787 (docker-deploy default). If that is inherited, `${PORT:-3000}`
+# resolves to 8787 and the server binds an UN-forwarded port while the browser
+# hits empty 3000 — Codespaces returns a response Safari offers to download as a
+# file ("Do you want to download ...-3000.app.github.dev"). Drop the inherited
+# docker default so the Codespace binds the forwarded port 3000.
+if [ "${PORT:-}" = "8787" ]; then unset PORT; fi
+export PORT="${PORT:-3000}"
 export SYNTHENIQ_DATA="${SYNTHENIQ_DATA:-$HOME/syntheniq-data}"
 export SYNTHENIQ_PASSWORD="${SYNTHENIQ_PASSWORD:-syntheniq-2026}"
 export SYNTHENIQ_WHISPER_MODEL="${SYNTHENIQ_WHISPER_MODEL:-small}"

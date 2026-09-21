@@ -226,9 +226,12 @@ try {
       reply.header('content-type', 'text/html');
       return reply.send(await import('node:fs/promises').then((m) => m.readFile(path.join(WEB_OUT_DIR, 'index.html'))));
     } catch {
-      return reply.code(200).send(
-        `<html><body style="font-family:system-ui;background:#070809;color:#f5f7f8;display:grid;place-items:center;height:100vh"><div style="text-align:center"><h2>Syntheniq API is running</h2><p>Web build not found (expected at ${WEB_OUT_DIR}). Run <code>npm run build:web</code> first.</p></div></body></html>`,
-      );
+      return reply
+        .code(200)
+        .header('content-type', 'text/html')
+        .send(
+          `<html><body style="font-family:system-ui;background:#070809;color:#f5f7f8;display:grid;place-items:center;height:100vh"><div style="text-align:center"><h2>Syntheniq API is running</h2><p>Web build not found (expected at ${WEB_OUT_DIR}). Run <code>npm run build:web</code> first.</p></div></body></html>`,
+        );
     }
   });
 } catch {
