@@ -1,26 +1,34 @@
 {
-  "name": "Syntheniq — full pipeline (>= 4 cores / 8 GB)",
+  "name": "Syntheniq — full pipeline (4-core/8GB+)",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "context": ".."
   },
+  "remoteUser": "node",
   "hostRequirements": {
     "cpus": 4,
     "memory": "8gb",
     "storage": "32gb"
   },
-  "forwardPorts": [3000],
+  "forwardPorts": [
+    3000
+  ],
   "portsAttributes": {
     "3000": {
-      "label": "Syntheniq — open this HTTPS URL on your iPhone",
+      "label": "Syntheniq — open in browser",
       "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "tmux new-session -d -s syntheniq 'bash /repo/scripts/start-codespaces.sh' || echo 'auto-start failed — in a terminal run: bash /repo/scripts/start-codespaces.sh'",
+  "postCreateCommand": "bash /repo/scripts/start-codespaces.sh > /home/node/syntheniq-boot.log 2>&1 & echo boot-started",
   "customizations": {
     "vscode": {
       "settings": {
         "python.defaultInterpreterPath": "python3"
       }
     }
+  },
+  "postStartCommand": "tmux new-session -d -s syntheniq 'bash /repo/scripts/start-codespaces.sh >> /home/node/syntheniq-boot.log 2>&1' ; echo start-ok",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {}
   }
 }

@@ -48,8 +48,9 @@ USER node
 # Python side: local transcription (private, no key needed) + edge-tts.
 # Bake the default whisper model ('small', ~460 MB) so the first project
 # never waits on a weights download.
-RUN python3 -m pip install --no-cache-dir --break-system-packages faster-whisper edge-tts \
-    && python3 -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+RUN python3 -m pip install --no-cache-dir --break-system-packages faster-whisper edge-tts
+RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')" \
+    || echo "warn: whisper model pre-warm skipped (downloads on first transcribe)"
 
 WORKDIR /repo
 
@@ -59,7 +60,7 @@ RUN npm ci --no-audit --no-fund
 # HyperFrames' own headless Chrome (official CLI, version-aware, idempotent)
 # so the first render never downloads ~115 MB and never hits a partial
 # install (missing icudtl.dat → IMMEDIATE_CRASH → render hangs).
-RUN npx hyperframes browser ensure || npx hyperframes browser
+RUN (npx hyperframes browser ensure || npx hyperframes browser) || echo "warn: chromium prefetch skipped (start script ensures at boot)"
 
 # Build the static studio + API (NEXT_PUBLIC_API_URL unset → the UI calls
 # the API on the same origin: exactly one forwarded port).
