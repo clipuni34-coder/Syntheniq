@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { ROOT, WHISPER_MODEL } from '../config.js';
-import { detectSilences } from './media.js';
+import { computeTrailingSilence, detectSilences } from './media.js';
 import type { Transcript } from './types.js';
 
 const pexecFile = promisify(execFile);
@@ -166,10 +166,7 @@ export async function transcribeLocal(wav: string, mediaDur: number, log: (m: st
   };
 
   const silences = await detectSilences(wav, mediaDur);
-  const trailing =
-    silences.length && silences[silences.length - 1].end >= mediaDur - 0.05
-      ? mediaDur - silences[silences.length - 1].start
-      : 0;
+  const trailing = computeTrailingSilence(silences, mediaDur);
   const cov = computeCoverage(transcript, mediaDur, trailing);
   log(
     `[transcribe] coverage gate: mediaDur=${mediaDur.toFixed(2)}s firstWord=${cov.firstStart.toFixed(2)}s ` +

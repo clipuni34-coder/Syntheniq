@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { loadAiConfig } from '../config.js';
 import { AiRouter } from '../ai/router.js';
 import type { Analysis, ClipState, JobState, MediaInfo, Plan, Transcript } from './types.js';
-import { energyBuckets, extractAudioWav16k, ffprobe, framePng, makeThumbnail, mediaSignals } from './media.js';
+import { computeTrailingSilence, energyBuckets, extractAudioWav16k, ffprobe, framePng, makeThumbnail, mediaSignals } from './media.js';
 import { computeCoverage, transcribeAuto } from './transcribe.js';
 import { runAnalyze } from './analyze.js';
 import { runPlan } from './plan.js';
@@ -67,10 +67,7 @@ export async function runPipeline(job: Job, projectDir: string): Promise<void> {
     await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 1));
   }
   const signals = await mediaSignals(wav, media.duration);
-  const trailing =
-    signals.silences.length && signals.silences[signals.silences.length - 1].end >= media.duration - 0.05
-      ? media.duration - signals.silences[signals.silences.length - 1].start
-      : 0;
+  const trailing = computeTrailingSilence(signals.silences, media.duration);
   const coverage = computeCoverage(transcript, media.duration, trailing).coverage;
   job.setTranscript({
     words: transcript.segments.reduce((a, s) => a + s.words.length, 0),

@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
-import type { MediaInfo, MediaSignals } from './types.js';
+import type { MediaInfo, MediaSignals, Silence } from './types.js';
 
 const pexecFile = promisify(execFile);
 
@@ -116,6 +116,18 @@ export async function detectSilences(wav: string, duration: number, thresholdDb 
   const tail = stderr.match(/silence_start:\s*([\d.]+)(?![\s\S]*silence_end)/);
   if (tail) out.push({ start: parseFloat(tail[1]), end: duration });
   return out.filter((s) => s.end > s.start);
+}
+
+/** Duration of trailing silence at the tail of `silences`, relative to the media
+ *  duration. Only the LAST gap counts, and only if it actually reaches the tail
+ *  of the media — tolerating small video/audio duration drift (AAC priming,
+ *  container rounding) where the audio track is a fraction shorter than the
+ *  video. Returns 0 for an interior pause or when no silence is detected. */
+export function computeTrailingSilence(silences: Silence[], mediaDur: number): number {
+  if (!silences.length) return 0;
+  const last = silences[silences.length - 1];
+  if (mediaDur - last.end <= 0.5) return Math.max(0, mediaDur - last.start);
+  return 0;
 }
 
 /** ~1 s RMS energy buckets (0..1 normalized by global max). */

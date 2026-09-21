@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { computeCoverage } from './transcribe.js';
+import { computeTrailingSilence } from './media.js';
 import type { Transcript } from './types.js';
 
 function mk(lastWordEnd: number, mediaDur: number, opts: { firstStart?: number; segEnd?: number } = {}): Transcript {
@@ -97,4 +98,30 @@ const THRESHOLD = 0.95;
   assert.ok(!c.passed);
 }
 
-console.log(`transcribe.coverage.test: ALL PASSED (${8} cases)`);
+// 9) trailing silence at the tail (last gap end == mediaDur)
+{
+  const c = computeTrailingSilence([{ start: 14.2, end: 17.6 }], 17.6);
+  assert.equal(c, 17.6 - 14.2, 'tail gap = mediaDur - start');
+}
+// 10) video/audio drift: gap end (17.6) is 0.4s shorter than mediaDur (18.0) -> still trailing
+{
+  const c = computeTrailingSilence([{ start: 14.196, end: 17.6 }], 18.0);
+  assert.equal(c, 18.0 - 14.196, 'drift within 0.5s tolerance still counts as trailing');
+}
+// 11) interior pause (gap ends 7s before end) -> NOT trailing
+{
+  const c = computeTrailingSilence([{ start: 10, end: 11 }], 18.0);
+  assert.equal(c, 0, 'interior pause is not trailing silence');
+}
+// 12) no silences -> 0
+{
+  const c = computeTrailingSilence([], 18.0);
+  assert.equal(c, 0);
+}
+// 13) gap ending >0.5s before media end -> not trailing (avoids false pass)
+{
+  const c = computeTrailingSilence([{ start: 14.2, end: 16.0 }], 18.0);
+  assert.equal(c, 0);
+}
+
+console.log(`transcribe.coverage.test: ALL PASSED (13 cases)`);
