@@ -62,6 +62,13 @@ else
   echo "[start] no env file ($ENVFILE) — keys come from Codespaces secrets or not at all"
 fi
 
+# ── AI provider default ─────────────────────────────────────────────────────
+# Gemini is the default for this personal setup. A GitHub Codespaces secret
+# (GEMINI_API_KEY) supplies the key. Set AI_PROVIDER explicitly only if not
+# already configured by a Codespace secret, the env file, or the caller.
+export AI_PROVIDER="${AI_PROVIDER:-gemini}"
+export AI_FALLBACK="${AI_FALLBACK:-openai,grok,heuristic}"
+
 # ── preflight: verify the whole toolchain ───────────────────────────────────
 echo "═══ Syntheniq preflight ═══"
 FAIL=0
