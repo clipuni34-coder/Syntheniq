@@ -28,6 +28,10 @@
     }
   },
   "postStartCommand": "tmux new-session -d -s syntheniq 'bash /repo/scripts/start-codespaces.sh >> /home/node/syntheniq-boot.log 2>&1' ; echo start-ok",
+  "remoteEnv": {
+    "AI_PROVIDER": "gemini",
+    "AI_FALLBACK": "openai,grok,heuristic"
+  },
   "features": {
     "ghcr.io/devcontainers/features/sshd:1": {}
   }
