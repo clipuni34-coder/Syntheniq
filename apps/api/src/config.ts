@@ -24,8 +24,11 @@ export const DEFAULT_MODELS: Record<ProviderId, { deep: string; fast: string }> 
   grok: { deep: 'grok-4.6', fast: 'grok-4.6' },
   // OpenAI — balanced + high-volume tiers (verified against developers.openai.com pricing, 2026-09-15)
   openai: { deep: 'gpt-5.6-terra', fast: 'gpt-5.6-luna' },
-  // Gemini — current stable Flash + cheapest Flash-Lite (verified in ai.google.dev model docs, 2026-09-15)
-  gemini: { deep: 'gemini-3.8-flash', fast: 'gemini-3.5-flash-lite' },
+  // Gemini — stable Flash (deep) + Flash-Lite (fast), verified against live API calls.
+  // gemini-3.8-flash was initially listed as the deep-tier default but is currently
+  // returning 503 "high demand" / quota errors in production; gemini-3.5-flash is
+  // the verified-working deep model for analyze/plan/qc/video tasks.
+  gemini: { deep: 'gemini-3.5-flash', fast: 'gemini-3.5-flash-lite' },
 };
 
 /** Which tier each task uses when no explicit model is configured. */
