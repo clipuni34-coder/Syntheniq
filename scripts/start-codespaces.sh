@@ -59,7 +59,33 @@ if [ -f "$ENVFILE" ]; then
   done < "$ENVFILE"
   echo "[start] env file: $ENVFILE (existing env/secrets take precedence)"
 else
-  echo "[start] no env file ($ENVFILE) — keys come from Codespaces secrets or not at all"
+  echo "[start] no env file ($ENVFILE)"
+fi
+
+# ── secret persistence (Codespaces tmux compatibility) ──────────────────────
+# GitHub Codespaces injects secrets (GEMINI_API_KEY, etc.) as environment
+# variables into the container. However, tmux sessions started by
+# postStartCommand may NOT inherit these vars (tmux filters the environment
+# unless update-environment explicitly lists each var).
+#
+# To bridge this gap: if any API key is present in the current environment
+# (e.g., from the first postCreateCommand run) but not yet persisted to the
+# env file, capture it there. The env-file loader above will then re-inject
+# it for subsequent tmux sessions. This ONLY persists to $HOME/.syntheniq.env
+# (outside the repo, never committed) and NEVER prints key values.
+PERSIST_ENV=0
+for k in GEMINI_API_KEY GOOGLE_API_KEY OPENAI_API_KEY XAI_API_KEY AI_PROVIDER AI_FALLBACK AI_MODEL AI_TASK_ANALYZE_PROVIDER AI_TASK_PLAN_PROVIDER AI_TASK_PACKAGE_PROVIDER AI_TASK_QC_PROVIDER AI_TASK_VIDEO_PROVIDER REVIEW_PROVIDER REVIEW_MODEL; do
+  if [ -n "${!k:-}" ]; then PERSIST_ENV=1; fi
+done
+if [ "$PERSIST_ENV" -eq 1 ]; then
+  ENVFILE_DIR="$(dirname "$ENVFILE")"
+  mkdir -p "$ENVFILE_DIR"
+  for k in GEMINI_API_KEY GOOGLE_API_KEY OPENAI_API_KEY XAI_API_KEY AI_PROVIDER AI_FALLBACK AI_MODEL AI_TASK_ANALYZE_PROVIDER AI_TASK_PLAN_PROVIDER AI_TASK_PACKAGE_PROVIDER AI_TASK_QC_PROVIDER AI_TASK_VIDEO_PROVIDER REVIEW_PROVIDER REVIEW_MODEL; do
+    if [ -n "${!k:-}" ] && ! grep -q "^${k}=" "$ENVFILE" 2>/dev/null; then
+      printf '%s=%s\n' "$k" "${!k}" >> "$ENVFILE"
+    fi
+  done
+  echo "[start] env file: $ENVFILE (secrets persisted from environment)"
 fi
 
 # ── AI provider default ─────────────────────────────────────────────────────
