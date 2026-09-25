@@ -29,6 +29,7 @@ RUN apt-get update \
 RUN pip3 install --no-cache-dir --break-system-packages faster-whisper \
   && python3 -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
 
+<<<<<<< ours
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
@@ -37,6 +38,14 @@ COPY apps/api ./apps/api
 COPY --from=web /repo/apps/web/out ./apps/api/web-out
 RUN npm run build --workspace @syntheniq/api \
   && npm prune --workspace @syntheniq/api --omit=dev
+=======
+WORKDIR /app
+COPY apps/api/package.json ./
+RUN npm install
+COPY apps/api ./
+COPY --from=web /repo/apps/web/out ./web-out
+RUN npm run build && npm prune --omit=dev
+>>>>>>> theirs
 
 WORKDIR /repo/apps/api
 ENV NODE_ENV=production \
@@ -44,7 +53,11 @@ ENV NODE_ENV=production \
   SYNTHENIQ_DATA=/repo/apps/api/data \
   WEB_OUT_DIR=/repo/apps/api/web-out
 
+<<<<<<< ours
 VOLUME /repo/apps/api/data
+=======
+VOLUME /app/data
+>>>>>>> theirs
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
