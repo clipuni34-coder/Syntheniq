@@ -70,6 +70,24 @@ function mergeSilences(silences: Span[]): Span[] {
   return merged;
 }
 
+function computeSilences(speechActive: Span[] | undefined, start: number, end: number): Span[] {
+  const active = (speechActive || [])
+    .filter((s) => s.end > start && s.start < end)
+    .sort((a, b) => a.start - b.start);
+  if (!active.length) return [];
+  const silences: Span[] = [];
+  if (active[0].start > start + 0.1) silences.push({ start, end: active[0].start });
+  for (let i = 1; i < active.length; i++) {
+    if (active[i].start - active[i - 1].end > 0.1) {
+      silences.push({ start: active[i - 1].end, end: active[i].start });
+    }
+  }
+  if (active[active.length - 1].end < end - 0.1) {
+    silences.push({ start: active[active.length - 1].end, end });
+  }
+  return mergeSilences(silences);
+}
+
 export async function buildVisualTreatment(
   input: BuildTreatmentInput,
   options: TreatmentOptions = {}
@@ -99,7 +117,7 @@ export async function buildVisualTreatment(
 
   const segments = analysis.transcript || [];
   const words: Word[] = segments.flatMap((s) => s.words || []);
-  const silences = mergeSilences(structure.speechActive ? [] : []);
+  const silences = computeSilences(structure.speechActive, clipStart, clipEnd);
   const allWords = words;
 
   const energyEvents = analysis.transcript
