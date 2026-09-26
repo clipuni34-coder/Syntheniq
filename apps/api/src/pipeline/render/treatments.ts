@@ -162,9 +162,26 @@ function buildSegmentFilters(
 
   if (seg.transitions.in) {
     allKeyframes.push({ t: seg.start, type: `transition_in_${seg.transitions.in}` });
+    const fadeDur = 0.5;
+    if (seg.transitions.in === 'flash') {
+      allFilters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@0.6:t=fill:d=${fadeDur}`);
+    } else if (seg.transitions.in === 'wipe') {
+      allFilters.push(`fade=t=in:st=0:d=${fadeDur}:alpha=1`);
+    } else {
+      allFilters.push(`fade=t=in:st=0:d=${fadeDur}:alpha=1`);
+    }
   }
   if (seg.transitions.out) {
     allKeyframes.push({ t: seg.end, type: `transition_out_${seg.transitions.out}` });
+    const fadeDur = 0.5;
+    const segDur = seg.end - seg.start;
+    if (seg.transitions.out === 'flash') {
+      allFilters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@0.6:t=fill:d=${fadeDur}`);
+    } else if (seg.transitions.out === 'wipe') {
+      allFilters.push(`fade=t=out:st=${segDur - fadeDur}:d=${fadeDur}:alpha=1`);
+    } else {
+      allFilters.push(`fade=t=out:st=${segDur - fadeDur}:d=${fadeDur}:alpha=1`);
+    }
   }
 
   return { videoFilters: allFilters, keyframes: allKeyframes };
