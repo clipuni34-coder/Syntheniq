@@ -185,6 +185,16 @@ const FILTER_BUILDERS: Record<CueKind, (cue: MotionCue, media: MediaInfo) => str
   settle: settleFilters,
 };
 
+/**
+ * Per-cue FFmpeg filter builder.
+ * NOTE: This is NOT wired into the render pipeline. The actual motion filter
+ * generation happens in render/treatments.ts → buildMotionFilters(), which
+ * produces a simplified scale/crop + drawbox filter set.
+ * This function and its FILTER_BUILDERS table (emphasisFilters, impactFilters,
+ * lowerThirdFilters, punchInFilters, transitionFilters, settleFilters) exist
+ * as an alternative filter-generation strategy that produces richer per-word
+ * drawtext/drawbox/drawline filters but are not currently used.
+ */
 export function buildCueFilters(cue: MotionCue, media: MediaInfo): string[] {
   const builder = FILTER_BUILDERS[cue.kind];
   if (!builder) return [];
