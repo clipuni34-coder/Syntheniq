@@ -429,11 +429,13 @@ test('Phase 10: multi-segment treatment produces valid labeled filtergraph', asy
   assert.ok(treatment.captionFilters.length > 0, 'base captions ass filter should be included');
 
   const args = buildRenderCommand('/fake/input.mp4', '/fake/output.mp4', treatment, { start: 0, duration: 12 });
-  const vfIdx = args.indexOf('-vf');
-  assert.ok(vfIdx >= 0, 'render command should include -vf');
-  const vfStr = args[vfIdx + 1];
+  const fcIdx = args.indexOf('-filter_complex');
+  assert.ok(fcIdx >= 0, 'multi-segment render command should use -filter_complex');
+  const vfStr = args[fcIdx + 1];
   assert.ok(vfStr.includes('subtitles=filename='), 'base captions should appear in render command');
   assert.ok(vfStr.includes('ass=filename='), 'kinetic captions should appear in render command');
+  assert.ok(args.includes('-map'), 'should map filter_complex output');
+  assert.ok(args.includes('[outv]'), 'should map [outv] output label');
 });
 
 test('Phase 10: single-segment treatment includes base caption filters', () => {

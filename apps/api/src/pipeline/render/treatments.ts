@@ -201,21 +201,31 @@ export function buildTreatment(
 
   const baseScaleCrop = buildScaleCropFilters(decision.media);
 
+  const clipStart = decision.segments[0]?.start || 0;
+  const isMultiSegment = decision.segments.length > 1;
+
   for (const seg of decision.segments) {
     const { videoFilters: segFilters, keyframes } = buildSegmentFilters(seg, decision, opts);
     allCues.push(...seg.cues);
-    allKeyframes.push(...keyframes.map((k) => ({ t: k.t + seg.start, type: k.type })));
+    allKeyframes.push(...keyframes.map((k) => ({ t: k.t, type: k.type })));
 
-    const trimFilter = `trim=start=${seg.start}:end=${seg.end},setpts=PTS-STARTPTS`;
-    const chain = [trimFilter, ...segFilters].join(',');
-    videoFilters.push(`[0:v]${chain}[${seg.id}]`);
+    if (isMultiSegment) {
+      const relStart = seg.start - clipStart;
+      const relEnd = seg.end - clipStart;
+      const trimFilter = `trim=start=${relStart}:end=${relEnd},setpts=PTS-STARTPTS`;
+      const chain = [trimFilter, ...segFilters].join(',');
+      videoFilters.push(`[0:v]${chain}[${seg.id}]`);
+    } else {
+      // Single segment: no labels, chain filters directly (uses -vf, not -filter_complex)
+      videoFilters.push(...segFilters);
+    }
   }
 
-  if (decision.segments.length > 1) {
+  if (isMultiSegment) {
     const concatInputs = decision.segments.map((s) => `[${s.id}]`).join('');
     videoFilters.push(`${concatInputs}concat=n=${decision.segments.length}:v=1:a=0[v]`);
     videoFilters.push(`[v]${baseScaleCrop.join(',')}`);
-  } else if (decision.segments.length === 1) {
+  } else {
     videoFilters.push(...baseScaleCrop);
   }
 
@@ -249,12 +259,50 @@ export function buildRenderCommand(
   treatment: TreatmentResult,
   { start, duration }: { start: number; duration: number }
 ): string[] {
+  const hasLabels = treatment.videoFilters.some((f) => f.includes('['));
+  const allVideoFilters = [...treatment.videoFilters];
+  const captionFilters = [...treatment.captionFilters, treatment.captionFilter].filter(Boolean) as string[];
+
+  if (hasLabels) {
+    // Complex filtergraph with intermediate labels — must use -filter_complex
+    // and map the final output label. Caption filters append to the last chain.
+    if (captionFilters.length > 0) {
+      const lastIdx = allVideoFilters.length - 1;
+      allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
+    }
+    // Add output label to the final chain so -map can reference it
+    const lastIdx = allVideoFilters.length - 1;
+    allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]}[outv]`;
+    return [
+      '-hide_banner', '-y',
+      '-ss', String(start),
+      '-t', String(duration),
+      '-i', input,
+      '-filter_complex', allVideoFilters.join(';'),
+      '-map', '[outv]',
+      '-map', '0:a:0?',
+      '-c:v', EXPORT_SPEC.videoCodec,
+      '-profile:v', 'high',
+      '-preset', 'veryfast',
+      '-crf', '20',
+      '-r', String(EXPORT_SPEC.fps),
+      '-pix_fmt', EXPORT_SPEC.pixFmt,
+      '-c:a', EXPORT_SPEC.audioCodec,
+      '-b:a', '128k',
+      '-ar', '48000',
+      '-ac', '2',
+      '-movflags', '+faststart',
+      '-shortest',
+      outFile,
+    ];
+  }
+
   const args = [
     '-hide_banner', '-y',
     '-ss', String(start),
     '-t', String(duration),
     '-i', input,
-    '-vf', [...treatment.videoFilters, ...treatment.captionFilters, treatment.captionFilter].filter(Boolean).join(','),
+    '-vf', [...allVideoFilters, ...captionFilters].filter(Boolean).join(','),
   ];
 
   if (treatment.audioFilters.length > 0) {
