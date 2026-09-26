@@ -9,6 +9,7 @@ export interface TreatmentResult {
   videoFilters: string[];
   audioFilters: string[];
   captionFilter: string | null;
+  captionFilters: string[];
   motionCues: MotionCue[];
   keyframes: Array<{ t: number; type: string }>;
   warnings: string[];
@@ -212,10 +213,13 @@ export function buildTreatment(
 
   const captionFilter = buildKineticCaptionFilter(opts);
 
+  const baseCaptionFilters = buildCaptionFilters(opts);
+
   return {
     videoFilters,
     audioFilters,
     captionFilter,
+    captionFilters: baseCaptionFilters,
     motionCues: allCues,
     keyframes: allKeyframes,
     warnings,
@@ -228,17 +232,12 @@ export function buildRenderCommand(
   treatment: TreatmentResult,
   { start, duration }: { start: number; duration: number }
 ): string[] {
-  const filters = [...treatment.videoFilters];
-  if (treatment.captionFilter) {
-    filters.push(treatment.captionFilter);
-  }
-
   const args = [
     '-hide_banner', '-y',
     '-ss', String(start),
     '-t', String(duration),
     '-i', input,
-    '-vf', filters.join(','),
+    '-vf', [...treatment.videoFilters, ...treatment.captionFilters, treatment.captionFilter].filter(Boolean).join(','),
   ];
 
   if (treatment.audioFilters.length > 0) {
