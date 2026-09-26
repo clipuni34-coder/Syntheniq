@@ -92,7 +92,7 @@ export function detectEmotionEvents(
 
   const sortedUnique = dedupe(events);
   if (!sortedUnique.some((e) => e.type === 'hook')) {
-    const first = words.filter((w) => w.start >= start && w.start <= start + 1.5 && (w as any).confidence !== 0.0)[0];
+     const first = words.filter((w) => w.start >= start && w.start <= start + 1.5)[0];
     if (first) sortedUnique.push({ t: r2(first.start), type: 'hook', intensity: 0.45, label: 'opening hook' });
   }
   if (!sortedUnique.some((e) => e.type === 'satisfaction' && e.t >= end - 3)) {

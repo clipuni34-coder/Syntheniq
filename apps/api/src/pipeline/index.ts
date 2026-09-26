@@ -23,7 +23,7 @@ import {
   type LlmProvider,
 } from './editorial/llm.js';
 import { buildCaptionEvents, writeASS } from './render/captions.js';
-import { renderClip, verifyExport, extractPoster } from './render/index.js';
+import { verifyExport, extractPoster } from './render/index.js';
 import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
 import type {
   AnalysisData,

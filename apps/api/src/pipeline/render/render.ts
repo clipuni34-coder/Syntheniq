@@ -120,10 +120,6 @@ export async function buildVisualTreatment(
   const silences = computeSilences(structure.speechActive, clipStart, clipEnd);
   const allWords = words;
 
-  const energyEvents = analysis.transcript
-    ? segments.map((s) => ({ t: (s.start + s.end) / 2, type: 'revelation' as const, intensity: 0.5, label: s.text.slice(0, 20) }))
-    : [];
-
   const emotion = analyzeEmotion(
     segments,
     allWords,
@@ -203,9 +199,12 @@ export async function buildVisualTreatment(
 
   const captionQC = validateCaptions(kineticEvents, decision.motion.cues);
 
+  let eventsForAss = kineticEvents;
+
   if (!captionQC.ok) {
     const repair = repairCaptions(kineticEvents, decision.motion.cues);
     if (repair.fixed) {
+      eventsForAss = repair.events;
       warnings.push(`Caption QC repaired ${repair.changes.length} issue(s)`);
       for (const change of repair.changes) warnings.push(`  - ${change}`);
     }
@@ -216,9 +215,9 @@ export async function buildVisualTreatment(
     warnings.push(`Readability issues: ${readability.issues.length} word(s) read too fast`);
   }
 
-  if (kineticEvents.length > 0) {
+  if (eventsForAss.length > 0) {
     const { buildKineticASS } = await import('./captions.js');
-    const content = buildKineticASS(kineticEvents, { title: clipTitle });
+    const content = buildKineticASS(eventsForAss, { title: clipTitle });
     fs.writeFileSync(kineticAssFile, content, 'utf8');
   } else {
     fs.rmSync(kineticAssFile, { force: true });
