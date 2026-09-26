@@ -15,6 +15,7 @@ import { EXPORT_SPEC, escapeFilterPath } from './index.js';
 import { run, ffprobe } from '../../lib/ffmpeg.js';
 import type { MediaInfo } from '../editorial/motion.js';
 import { verifyExport } from '../editorial/qc.js';
+import { buildSafeRenderFilters } from '../editorial/qc.js';
 
 function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
@@ -232,6 +233,9 @@ export async function buildVisualTreatment(
 
   warnings.push(...treatment.warnings);
   warnings.push(`Treatment: ${treatment.videoFilters.length} video filters, ${treatment.motionCues.length} motion cues`);
+
+  const safeFilters = buildSafeRenderFilters(treatment.videoFilters, decision.motion.cues, media, clipDuration);
+  for (const w of safeFilters.warnings) warnings.push(`[filter QC] ${w}`);
 
   const renderArgs = buildRenderCommand(videoPath, outFile, treatment, {
     start: clipStart,
