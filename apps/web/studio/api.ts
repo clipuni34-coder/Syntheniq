@@ -81,8 +81,10 @@ export function apiBase(): string {
   const configured = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
   if (configured) return configured;
   if (typeof window !== 'undefined') {
-    // Single-origin mode: the API serves the built web app itself.
     if (window.location.port === '8787') return window.location.origin;
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    return `${protocol}//${host}:8787`;
   }
   return 'http://localhost:8787';
 }
