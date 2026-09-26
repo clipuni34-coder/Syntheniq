@@ -206,14 +206,14 @@ export function buildTreatment(
     allCues.push(...seg.cues);
     allKeyframes.push(...keyframes.map((k) => ({ t: k.t + seg.start, type: k.type })));
 
-    for (const f of segFilters) {
-      videoFilters.push(`[${seg.id}]${f}`);
-    }
+    const trimFilter = `trim=start=${seg.start}:end=${seg.end},setpts=PTS-STARTPTS`;
+    const chain = [trimFilter, ...segFilters].join(',');
+    videoFilters.push(`[0:v]${chain}[${seg.id}]`);
   }
 
   if (decision.segments.length > 1) {
     const concatInputs = decision.segments.map((s) => `[${s.id}]`).join('');
-    videoFilters.push(`${concatInputs}concat=n=${decision.segments.length}:v=1:a=1[v][a]`);
+    videoFilters.push(`${concatInputs}concat=n=${decision.segments.length}:v=1:a=0[v]`);
     videoFilters.push(`[v]${baseScaleCrop.join(',')}`);
   } else if (decision.segments.length === 1) {
     videoFilters.push(...baseScaleCrop);

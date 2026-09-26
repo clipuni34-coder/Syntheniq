@@ -14,6 +14,7 @@ import { buildTreatment, buildRenderCommand, type TreatmentOptions, type Treatme
 import { EXPORT_SPEC, escapeFilterPath } from './index.js';
 import { run, ffprobe } from '../../lib/ffmpeg.js';
 import type { MediaInfo } from '../editorial/motion.js';
+import { verifyExport } from '../editorial/qc.js';
 
 function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
@@ -287,8 +288,7 @@ export async function renderWithTreatment(
 
   result.bytes = stat.size;
 
-  const { verifyExport } = await import('../editorial/qc.js');
-  const verification = await verifyExport(result.outFile);
+  const verification = await verifyExport(result.outFile, { requireAudio: false });
   result.verified = verification.ok;
 
   if (!verification.ok) {

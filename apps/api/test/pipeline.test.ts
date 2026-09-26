@@ -402,6 +402,62 @@ test('Phase 10: buildRenderCommand generates ffmpeg args', async () => {
   assert.ok(args.includes('/fake/output.mp4'));
 });
 
+test('Phase 10: multi-segment treatment produces valid labeled filtergraph', async () => {
+  const emotion = analyzeEmotion(TEST_SEGMENTS, TEST_WORDS, TEST_SILENCES, TEST_CLIP_START, TEST_CLIP_END);
+  const retention = scoreRetentionArchitecture(
+    classifyRetentionBeats(TEST_SEGMENTS, TEST_WORDS, emotion.events, TEST_ENERGY, TEST_SILENCES, 12, []),
+    emotion.trajectory,
+    TEST_SEGMENTS,
+    TEST_WORDS,
+    TEST_ENERGY,
+    TEST_SILENCES,
+    12
+  );
+  const motion = planMotion(emotion.events, retention.beats, TEST_MEDIA, 12);
+  const decision = buildEditDecision(
+    { startTime: 0, endTime: 12, segments: TEST_SEGMENTS, words: TEST_WORDS, energyCurve: TEST_ENERGY, silences: TEST_SILENCES, media: TEST_MEDIA },
+    { emotion, retention, motion }
+  );
+
+  const treatment = buildTreatment(decision, { assFile: '/tmp/test.ass', kineticAssFile: '/tmp/kinetic.ass' });
+  const vf = treatment.videoFilters.join(',');
+
+  // Each segment must have a trim + output label for the concat
+  assert.ok(vf.includes('trim='), 'multi-segment filtergraph should include trim');
+  assert.ok(vf.includes('[seg-'), 'multi-segment filtergraph should use labeled segment outputs');
+  assert.ok(vf.includes('concat=n=') && vf.includes('v=1:a=0'), 'should end with video-only concat');
+  assert.ok(treatment.captionFilters.length > 0, 'base captions ass filter should be included');
+
+  const args = buildRenderCommand('/fake/input.mp4', '/fake/output.mp4', treatment, { start: 0, duration: 12 });
+  const vfIdx = args.indexOf('-vf');
+  assert.ok(vfIdx >= 0, 'render command should include -vf');
+  const vfStr = args[vfIdx + 1];
+  assert.ok(vfStr.includes('subtitles=filename='), 'base captions should appear in render command');
+  assert.ok(vfStr.includes('ass=filename='), 'kinetic captions should appear in render command');
+});
+
+test('Phase 10: single-segment treatment includes base caption filters', () => {
+  const emotion = analyzeEmotion(TEST_SEGMENTS, TEST_WORDS, TEST_SILENCES, TEST_CLIP_START, TEST_CLIP_END);
+  const retention = scoreRetentionArchitecture(
+    classifyRetentionBeats(TEST_SEGMENTS, TEST_WORDS, emotion.events, TEST_ENERGY, TEST_SILENCES, 12, []),
+    emotion.trajectory,
+    TEST_SEGMENTS,
+    TEST_WORDS,
+    TEST_ENERGY,
+    TEST_SILENCES,
+    12
+  );
+  const motion = planMotion(emotion.events, retention.beats, TEST_MEDIA, 12);
+  const decision = buildEditDecision(
+    { startTime: 0, endTime: 12, segments: TEST_SEGMENTS, words: TEST_WORDS, energyCurve: TEST_ENERGY, silences: TEST_SILENCES, media: TEST_MEDIA },
+    { emotion, retention, motion }
+  );
+
+  const treatment = buildTreatment(decision, { assFile: '/tmp/test.ass' });
+  assert.ok(treatment.captionFilters.length > 0, 'assFile should produce caption filter');
+  assert.ok(treatment.captionFilters[0].includes('subtitles=filename='), 'should include subtitles filter');
+});
+
 test('Phase 12: full pipeline integration — emotion → retention → motion → plan → treatment', async () => {
   const emotion = analyzeEmotion(TEST_SEGMENTS, TEST_WORDS, TEST_SILENCES, TEST_CLIP_START, TEST_CLIP_END);
   const retention = scoreRetentionArchitecture(

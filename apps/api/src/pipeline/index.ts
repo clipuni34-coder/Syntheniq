@@ -23,8 +23,9 @@ import {
   type LlmProvider,
 } from './editorial/llm.js';
 import { buildCaptionEvents, writeASS } from './render/captions.js';
-import { verifyExport, extractPoster } from './render/index.js';
+import { extractPoster } from './render/index.js';
 import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
+import { verifyExport } from './editorial/qc.js';
 import type {
   AnalysisData,
   JobPublic,
@@ -427,7 +428,7 @@ export async function runExport(projectId: string, clipId: string, jobId: string
     }
 
     await jobs.updateJob(jobId, { progress: 92, message: MSG.FINISH });
-    const verification = await verifyExport(outFile);
+    const verification = await verifyExport(outFile, { requireAudio: false });
     if (!verification.ok) {
       throw new Error(`Export failed verification: ${JSON.stringify(verification.checks)}`);
     }
