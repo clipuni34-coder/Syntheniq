@@ -24,6 +24,7 @@ import {
 } from './editorial/llm.js';
 import { buildCaptionEvents, writeASS } from './render/captions.js';
 import { renderClip, verifyExport, extractPoster } from './render/index.js';
+import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
 import type {
   AnalysisData,
   JobPublic,
@@ -399,16 +400,31 @@ export async function runExport(projectId: string, clipId: string, jobId: string
     const assFile = clip.captions && clip.captions.file ? path.join(dir, clip.captions.file) : null;
     const outFile = p.exportPath(projectId, clipId);
 
-    await renderClip({
+    const treatmentInput: BuildTreatmentInput = {
       input,
-      start: clip.start,
-      duration: clip.end - clip.start,
-      assFile: assFile && fs.existsSync(assFile) ? assFile : null,
-      outFile,
-      onProgress: (frac: number) => {
-        jobs.updateJob(jobId, { progress: 6 + Math.round(frac * 82), message: MSG.BUILD }).catch(() => undefined);
+      clip: {
+        start: clip.start,
+        end: clip.end,
+        id: clip.id,
+        title: clip.title,
+        scores: { emotion: clip.scores.emotion },
       },
+      analysis,
+      outDir: dir,
+    };
+
+    const treatmentResult = await renderWithTreatment(treatmentInput, { assFile }, (frac: number) => {
+      jobs.updateJob(jobId, { progress: 6 + Math.round(frac * 82), message: MSG.BUILD }).catch(() => undefined);
     });
+
+    if (!treatmentResult.verified) {
+      jobs.updateJob(jobId, { progress: 90, message: 'Retrying render with repair mode' }).catch(() => undefined);
+      const { repairExport } = await import('./editorial/qc.js');
+      const repair = await repairExport(outFile, input, clip.start, clip.end - clip.start, outFile, assFile);
+      if (!repair.success) {
+        throw new Error(`Export repair failed: ${repair.issues.join(', ')}`);
+      }
+    }
 
     await jobs.updateJob(jobId, { progress: 92, message: MSG.FINISH });
     const verification = await verifyExport(outFile);
