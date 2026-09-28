@@ -1,0 +1,14 @@
+{
+  "name": "Syntheniq Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-inside:1": {}
+  },
+  "forwardPorts": [8787, 3000],
+  "postCreateCommand": "apt-get update && apt-get install -y ffmpeg espeak-ng python3 && npm install",
+  "postStartCommand": "npm run dev",
+  "remoteEnv": {
+    "PORT": "8787",
+    "SYNTHENIQ_DATA": "/workspace/syn-test-data"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log*
+dist/
+.env
+.env.local
+*.log
+tmp/
+data/
+test/fixtures/
+test/fixtures/.lock
+apps/*/test/fixtures/
+apps/*/test/fixtures/.lock
