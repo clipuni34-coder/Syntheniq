@@ -10,3 +10,5 @@ test/fixtures/
 test/fixtures/.lock
 apps/*/test/fixtures/
 apps/*/test/fixtures/.lock
+.next/
+*.tsbuildinfo
