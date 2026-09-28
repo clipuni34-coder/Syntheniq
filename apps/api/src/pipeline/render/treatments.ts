@@ -76,11 +76,11 @@ function buildMotionFilters(
       case 'emphasis': {
         const intensity = clamp01(cue.intensity || 0.6);
         const zoom = 1 + intensity * 0.15;
-        const scaledW = Math.round(media.width * zoom);
-        const scaledH = Math.round(media.height * zoom);
+        const scaledW = Math.round(EXPORT_SPEC.width * zoom);
+        const scaledH = Math.round(EXPORT_SPEC.height * zoom);
         filters.push(
           `scale=${scaledW}:${scaledH},` +
-          `crop=${media.width}:${media.height}:(iw-${media.width})/2:(ih-${media.height})/2`
+          `crop=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(iw-${EXPORT_SPEC.width})/2:(ih-${EXPORT_SPEC.height})/2`
         );
         keyframes.push({ t, type: 'emphasis_zoom' });
         break;
@@ -97,11 +97,11 @@ function buildMotionFilters(
 
       case 'punch_in': {
         const zoom = 1.5 + (cue.intensity || 0.7) * 1.5;
-        const scaledW = Math.round(media.width * zoom);
-        const scaledH = Math.round(media.height * zoom);
+        const scaledW = Math.round(EXPORT_SPEC.width * zoom);
+        const scaledH = Math.round(EXPORT_SPEC.height * zoom);
         filters.push(
           `scale=${scaledW}:${scaledH},` +
-          `crop=${media.width}:${media.height}:(iw-${media.width})/2:(ih-${media.height})/2`
+          `crop=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(iw-${EXPORT_SPEC.width})/2:(ih-${EXPORT_SPEC.height})/2`
         );
         keyframes.push({ t, type: 'punch_in' });
         break;
@@ -119,11 +119,11 @@ function buildMotionFilters(
 
       case 'settle': {
         const zoom = 1.05;
-        const scaledW = Math.round(media.width * zoom);
-        const scaledH = Math.round(media.height * zoom);
+        const scaledW = Math.round(EXPORT_SPEC.width * zoom);
+        const scaledH = Math.round(EXPORT_SPEC.height * zoom);
         filters.push(
           `scale=${scaledW}:${scaledH},` +
-          `crop=${media.width}:${media.height}:(iw-${media.width})/2:(ih-${media.height})/2`
+          `crop=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(iw-${EXPORT_SPEC.width})/2:(ih-${EXPORT_SPEC.height})/2`
         );
         keyframes.push({ t, type: 'settle_zoom' });
         break;
