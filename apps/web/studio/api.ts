@@ -81,10 +81,20 @@ export function apiBase(): string {
   const configured = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
   if (configured) return configured;
   if (typeof window !== 'undefined') {
-    if (window.location.port === '8787') return window.location.origin;
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    return `${protocol}//${host}:8787`;
+    const { protocol, hostname, port } = window.location;
+    if (port === '8787') return window.location.origin;
+
+    // GitHub Codespaces forwards each port on a subdomain like
+    //   https://<codespace>-<port>.<region>.app.github.dev
+    // or the legacy  https://<codespace>-<port>.<region>.githubpreview.dev
+    // Swap the port segment so -3000 → -8787 without hardcoding any URL.
+    if (/\.githubpreview\.dev$/.test(hostname) || /\.app\.github\.dev$/.test(hostname)) {
+      const apiHost = hostname.replace(/(-\d+)(\.)/, '-8787$2');
+      return `${protocol}//${apiHost}`;
+    }
+
+    // Local development: same host, explicit API port.
+    return `${protocol}//${hostname}:8787`;
   }
   return 'http://localhost:8787';
 }
