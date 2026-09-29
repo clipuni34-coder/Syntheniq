@@ -8,7 +8,6 @@
   "postCreateCommand": "apt-get update && apt-get install -y ffmpeg espeak-ng python3 && npm install",
   "postStartCommand": "npm run dev",
   "remoteEnv": {
-    "PORT": "8787",
     "SYNTHENIQ_DATA": "/workspace/syn-test-data"
   }
 }
