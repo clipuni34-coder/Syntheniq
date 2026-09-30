@@ -44,6 +44,12 @@ export const MSG = {
   FINISH: 'Finishing your edits',
 };
 
+function atomicWriteJSON(filePath: string, data: unknown): void {
+  const tmp = `${filePath}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, filePath);
+}
+
 // Local working copy first; in R2 mode restore from durable storage when the
 // local file is gone (another worker, fresh deploy, restarted disk).
 async function ensureSource(project: Project): Promise<string> {
@@ -72,7 +78,11 @@ export async function readAnalysis(projectId: string): Promise<AnalysisData> {
   if (!fs.existsSync(file)) {
     throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
   }
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!data || !data.clips) {
+    throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
+  }
+  return data;
 }
 
 export interface RecoverGapsInput {
@@ -342,7 +352,7 @@ export async function runAnalysis(
       stats,
       notes,
     };
-    fs.writeFileSync(p.analysisPath(projectId), JSON.stringify(analysis));
+    atomicWriteJSON(p.analysisPath(projectId), analysis);
     if (isR2()) {
       // Durability is load-bearing in production (any replica must read it).
       await getStorage().mirror(p.analysisPath(projectId), keys.analysis(projectId));
@@ -445,7 +455,7 @@ export async function runExport(projectId: string, clipId: string, jobId: string
       verified: verification.details,
       exportedAt: new Date().toISOString(),
     };
-    fs.writeFileSync(p.analysisPath(projectId), JSON.stringify(analysis));
+    atomicWriteJSON(p.analysisPath(projectId), analysis);
     if (isR2()) {
       await getStorage().mirror(p.analysisPath(projectId), keys.analysis(projectId));
     }
