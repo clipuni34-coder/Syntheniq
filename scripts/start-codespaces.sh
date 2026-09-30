@@ -33,6 +33,7 @@ ENSURE_ONLY=0
 # docker default so the Codespace binds the forwarded port 3000.
 if [ "${PORT:-}" = "8787" ]; then unset PORT; fi
 export PORT="${PORT:-3000}"
+export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:${PORT}}"
 export SYNTHENIQ_DATA="${SYNTHENIQ_DATA:-$HOME/syntheniq-data}"
 export SYNTHENIQ_PASSWORD="${SYNTHENIQ_PASSWORD:-syntheniq-2026}"
 export SYNTHENIQ_WHISPER_MODEL="${SYNTHENIQ_WHISPER_MODEL:-small}"

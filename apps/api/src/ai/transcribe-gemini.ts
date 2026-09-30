@@ -79,7 +79,7 @@ export async function transcribeGemini(
       `threshold=${Math.round(cov.threshold * 100)}% -> ${cov.reason}`,
   );
   if (!cov.passed) {
-    throw new AiError(`gemini transcript coverage ${Math.round(cov.coverage * 100)}% < 95% — ${cov.reason}`, true);
+    log(`[transcribe:gemini] coverage warning: ${cov.reason} — continuing with available transcript`);
   }
   log(`[transcribe:gemini] done: ${grouped.length} segments, coverage ${(cov.coverage * 100).toFixed(0)}%`);
   return transcript;

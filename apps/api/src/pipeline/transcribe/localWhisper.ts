@@ -47,6 +47,7 @@ export async function transcribeLocal(
   const { stdout } = await run('python3', args, { timeoutMs: 1000 * 60 * 60 });
   const parsed = JSON.parse(stdout);
   const segments = Array.isArray(parsed.segments) ? parsed.segments : [];
+  const hasText = segments.some((s: any) => String(s.text || '').trim().length > 0);
   return {
     segments: segments
       .filter((s: any) => s && Number.isFinite(s.start) && Number.isFinite(s.end))
@@ -62,6 +63,6 @@ export async function transcribeLocal(
       })),
     language: parsed.language || null,
     provider: `local-whisper (${WHISPER_MODEL})`,
-    hasText: true,
+    hasText: hasText || segments.length > 0, // segments may be empty (silent/music video)
   };
 }

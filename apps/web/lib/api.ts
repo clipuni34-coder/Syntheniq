@@ -137,19 +137,41 @@ export async function createProject(): Promise<string | null> {
 }
 
 /** XHR upload with progress callback. */
-export function uploadVideo(projectId: string, file: File, onProgress: (pct: number) => void): Promise<void> {
+export function uploadVideo(projectId: string, file: File, onProgress: (pct: number) => void): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API}/v1/projects/${projectId}/upload`);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`upload failed: ${xhr.status}`)));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          resolve({ status: 'uploaded' });
+        }
+      } else {
+        const err = (xhr.responseText || '').trim();
+        reject(new Error(`upload failed (${xhr.status}): ${err || 'unknown error'}`));
+      }
+    };
     xhr.onerror = () => reject(new Error('upload failed (network)'));
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('video', file);
     xhr.send(fd);
   });
+}
+
+export interface UploadResult {
+  status: string;
+  media?: {
+    filename: string;
+    bytes: number;
+    probe?: { duration: number; width: number; height: number };
+    uploadedAt: string;
+  };
+  [key: string]: any;
 }
 
 export async function fetchClipMeta(projectId: string, name: string): Promise<ClipMeta | null> {

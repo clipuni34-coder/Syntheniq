@@ -72,7 +72,16 @@ export async function readAnalysis(projectId: string): Promise<AnalysisData> {
   if (!fs.existsSync(file)) {
     throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
   }
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!parsed || !parsed.clips) {
+      throw Object.assign(new Error('Analysis file is corrupt — run analysis again'), { statusCode: 500 });
+    }
+    return parsed as AnalysisData;
+  } catch (e) {
+    if ((e as { statusCode?: number }).statusCode === 500) throw e;
+    throw Object.assign(new Error('Analysis file is corrupt — run analysis again'), { statusCode: 500 });
+  }
 }
 
 export interface RecoverGapsInput {
