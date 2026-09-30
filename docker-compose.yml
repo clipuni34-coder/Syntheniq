@@ -1,0 +1,42 @@
+# Syntheniq — self-hosted, single-user. No accounts, no billing, no multi-tenancy.
+#
+#   cp .env.example .env   # fill in the keys you have (any one works; fallback chain applies)
+#   docker compose up -d --build
+#   open http://localhost:8787   (password from .env: SYNTHENIQ_PASSWORD)
+#
+# All uploads/renders/jobs persist in the named volume `syntheniq-data`.
+
+services:
+  syntheniq:
+    build:
+      context: .
+      args:
+        # Set when the studio is reverse-proxied at a URL without :8787
+        # (e.g. https://syntheniq.example.com). Blank for port-based access.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    image: syntheniq:latest
+    container_name: syntheniq
+    ports:
+      - "${SYNTHENIQ_PORT:-8787}:8787"
+    environment:
+      SYNTHENIQ_PASSWORD: ${SYNTHENIQ_PASSWORD:-syntheniq-2026}
+      # AI — keys stay on the host in .env; the app picks the first working provider
+      # and fails over down the chain (last resort: built-in heuristic mode).
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}          # empty = auto-pick; openai|gemini|grok
+      AI_MODEL: ${AI_MODEL:-}                # optional; must match AI_PROVIDER's family
+      AI_FALLBACK: ${AI_FALLBACK:-}          # e.g. gemini,openai
+      SYNTHENIQ_WHISPER_MODEL: ${SYNTHENIQ_WHISPER_MODEL:-small}
+    volumes:
+      - syntheniq-data:/data
+    restart: unless-stopped
+    # Renders are CPU+RAM heavy. Defaults below are for a comfortable 1080p;
+    # lower `mem_limit` only if you know your source videos are small.
+    mem_limit: 8g
+    memswap_limit: 10g
+    cpus: "4"
+
+volumes:
+  syntheniq-data:
