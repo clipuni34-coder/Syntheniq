@@ -19,7 +19,7 @@ export function newJobState(id: string): JobState {
   return {
     id,
     createdAt: new Date().toISOString(),
-    status: 'queued',
+    status: 'created',
     stage: null,
     progress: 0,
     stages,

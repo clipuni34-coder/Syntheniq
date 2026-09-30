@@ -13,5 +13,13 @@
     "build:api": "npm --workspace @syntheniq/api run build",
     "build": "npm run build:web && npm run build:api",
     "start": "node apps/api/dist/server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1143.0",
+    "@aws-sdk/s3-request-presigner": "^3.1143.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }

@@ -389,3 +389,107 @@ export async function checkCancelled(job: Job): Promise<void> {
 // re-export for typing convenience
 export type { MediaInfo, Plan, Transcript, JobState };
 export { energyBuckets };
+
+// ── readAnalysis (shared by routes + worker) ─────────────────────────────
+import type { AnalysisData } from '../types.js';
+import { projectDir } from '../store.js';
+
+export async function readAnalysis(projectId: string): Promise<AnalysisData> {
+  const file = path.join(projectDir(projectId), 'files', 'analysis.json');
+  try {
+    const buf = await fs.readFile(file, 'utf8');
+    const data = JSON.parse(buf);
+    if (!data || !data.clips) {
+      throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
+    }
+    return data as AnalysisData;
+  } catch (e) {
+    if ((e as { code?: string }).code === 'ENOENT' || (e as { statusCode?: number }).statusCode === 409) {
+      throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 404 });
+    }
+    throw e;
+  }
+}
+
+// ── jobHandlers (compatibility shim for standalone worker mode) ─────────
+export function jobHandlers(): Record<string, (job: { id: string; type: string; label: string; meta: Record<string, unknown> }) => Promise<unknown>> {
+  const handlers: Record<string, (job: { id: string; type: string; label: string; meta: Record<string, unknown> }) => Promise<unknown>> = {};
+  // The deploy/codespace architecture runs the pipeline inline via startPipeline.
+  // These handlers are retained for standalone worker compatibility.
+  handlers['analyze'] = async (job) => {
+    const { startPipeline } = await import('../jobs.js');
+    await startPipeline(job.id);
+  };
+  handlers['export'] = async (job) => {
+    const { renderVariant } = await import('./variant.js');
+    const { projectDir: pdir } = await import('../store.js');
+    const clipId = (job.meta?.clipId as string) || '';
+    const hookText = (job.meta?.hookText as string) || '';
+    const { loadJob, saveJob } = await import('../store.js');
+    const jobState = await loadJob(job.id);
+    if (jobState) {
+      await renderVariant(pdir(job.id), clipId, hookText, jobState).catch(() => undefined);
+    }
+  };
+  return handlers;
+}
+
+// ── coverage repair (Phase 4-12 gap recovery) ─────────────────────────────
+import { transcribeRange } from './transcribe/index.js';
+import type { Segment } from '../types.js';
+import { mergeSegments, analyzeCoverage } from './transcribe/coverage.js';
+import * as p from '../lib/paths.js';
+
+function formatClock(n: number): string {
+  const m = Math.floor(n / 60).toString().padStart(2, '0');
+  const s = Math.floor(n % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+export interface RecoverGapsInput {
+  input: string;
+  projectId: string;
+  duration: number;
+  segments: Segment[];
+  coverage: ReturnType<typeof analyzeCoverage>;
+  language: string | null;
+  notes: string[];
+  transcribeRangeFn?: typeof transcribeRange;
+  onProgress?: (fraction: number) => void;
+}
+
+export async function recoverGaps(input: RecoverGapsInput): Promise<{
+  segments: Segment[];
+  coverage: ReturnType<typeof analyzeCoverage>;
+}> {
+  const gaps = [...input.coverage.gaps]
+    .sort((a, b) => b.end - b.start - (a.end - a.start))
+    .slice(0, 3);
+  const transcribeFn = input.transcribeRangeFn || transcribeRange;
+  let segments = input.segments;
+  p.ensureDir(p.workDir(input.projectId));
+  for (let i = 0; i < gaps.length; i++) {
+    const gap = gaps[i];
+    const sliceWav = p.audioPath(input.projectId, `gap${i}`);
+    try {
+      const extra = await transcribeFn(input.input, gap.start, gap.end, sliceWav, {
+        language: input.language || undefined,
+      });
+      segments = mergeSegments(segments, extra.segments);
+    } catch (err) {
+      input.notes.push(`Could not recover ${formatClock(gap.start)}–${formatClock(gap.end)}: ${(err as Error).message}`);
+    } finally {
+      try {
+        await fs.unlink(sliceWav).catch(() => {});
+      } catch { /* ignore */ }
+    }
+    if (input.onProgress) {
+      try {
+        input.onProgress((i + 1) / gaps.length);
+      } catch {
+        /* ignore progress listener errors */
+      }
+    }
+  }
+  return { segments, coverage: analyzeCoverage(segments, input.duration) };
+}

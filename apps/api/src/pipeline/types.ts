@@ -284,7 +284,7 @@ export interface ClipState {
 export interface JobState {
   id: string;
   createdAt: string;
-  status: 'queued' | 'running' | 'done' | 'error' | 'cancelling' | 'cancelled' | 'interrupted';
+  status: 'created' | 'queued' | 'running' | 'done' | 'error' | 'cancelling' | 'cancelled' | 'interrupted';
   stage: StageName | null;
   progress: number; // 0..1 overall
   stages: Partial<Record<StageName, { status: 'pending' | 'running' | 'done' | 'error' | 'skipped'; progress: number; detail?: string }>>;

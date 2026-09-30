@@ -114,7 +114,7 @@ export async function transcribeLong(
       if (part.provider && !part.provider.includes('chunked')) merged.provider = `${part.provider}+chunked`;
       merged.language = part.language ?? null;
     }
-    if (Array.isArray(part.attempts) && part.attempts.length) merged.attempts.push(...part.attempts);
+    if (Array.isArray(part.attempts) && part.attempts.length) { merged.attempts = merged.attempts || []; merged.attempts.push(...part.attempts); }
     for (const seg of part.segments || []) {
       if (seg.end <= start || seg.start >= end) continue;
       merged.segments.push(seg);
