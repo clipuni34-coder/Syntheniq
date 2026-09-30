@@ -1,0 +1,19 @@
+{
+  "name": "syntheniq",
+  "private": true,
+  "version": "0.2.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @syntheniq/web run dev",
+    "dev:api": "npm --workspace @syntheniq/api run dev",
+    "dev": "concurrently -c \"auto\" -k \"npm run dev:api\" \"npm run dev:web\"",
+    "build:web": "npm --workspace @syntheniq/web run build",
+    "build:api": "npm --workspace @syntheniq/api run build",
+    "build": "npm run build:web && npm run build:api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
