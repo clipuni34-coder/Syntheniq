@@ -78,7 +78,12 @@ export async function readAnalysis(projectId: string): Promise<AnalysisData> {
   if (!fs.existsSync(file)) {
     throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
   }
-  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let data: AnalysisData | null = null;
+  try {
+    data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    throw Object.assign(new Error('Analysis file is corrupt — re-run analysis'), { statusCode: 500 });
+  }
   if (!data || !data.clips) {
     throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
   }
