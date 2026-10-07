@@ -1,0 +1,18 @@
+node_modules
+.next
+out
+dist
+data
+apps/api/data
+.env
+.env.*
+!.env.example
+coverage
+*.log
+.DS_Store
+# Generated test media (rebuilt by `npm run fixtures`)
+apps/api/test/fixtures/*.mp4
+apps/api/test/fixtures/*.wav
+apps/api/test/fixtures/*.txt
+apps/api/test/fixtures/.hash
+apps/api/test/fixtures/.lock
