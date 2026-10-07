@@ -65,6 +65,11 @@ export default function Home() {
       setAuthErr('Enter the passcode first');
       return;
     }
+    const MAX_BYTES = 512 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setAuthErr(`File is ${(file.size / 1024 / 1024).toFixed(0)} MB — exceeds the 512 MB limit. Trim or compress your video.`);
+      return;
+    }
     setError('');
     setBusy({ phase: 'upload', pct: 0 });
     try {

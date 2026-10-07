@@ -86,6 +86,9 @@ export async function runPipeline(job: Job, projectDir: string): Promise<void> {
   let analyzeProviders: { video?: string; analyze: string };
   if (await has(analysisPath)) {
     analysis = JSON.parse(await fs.readFile(analysisPath, 'utf8'));
+    if (!analysis || typeof analysis !== 'object') {
+      throw new Error('analysis.json is corrupted or null — re-run the pipeline');
+    }
     analyzeProviders = { analyze: job.state.providers.analyze || 'persisted' };
     log('info', `analyze: reusing persisted analysis (${analysis.moments.length} moments) (resume)`);
   } else {

@@ -15,8 +15,10 @@ import { AiRouter } from './ai/router.js';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
+export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+
 await app.register(cors, { origin: true });
-await app.register(multipart, { limits: { fileSize: 512 * 1024 * 1024 } });
+await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
 await app.register(cookie, { secret: randomBytes(32).toString('hex') });
 
 const AUTH_TOKENS = new Set<string>();
@@ -86,6 +88,11 @@ app.post('/v1/projects/:projectId/upload', async (req, reply) => {
   const job = await loadJob(projectId);
   if (!job) return reply.code(404).send({ error: 'project not found' });
   if (job.status === 'running') return reply.code(409).send({ error: 'job already running' });
+
+  const contentLength = req.headers['content-length'];
+  if (contentLength && Number(contentLength) > MAX_UPLOAD_BYTES) {
+    return reply.code(413).send({ error: `File exceeds the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB limit` });
+  }
 
   const file = await req.file();
   if (!file) return reply.code(400).send({ error: 'video file required (field name: "file")' });
