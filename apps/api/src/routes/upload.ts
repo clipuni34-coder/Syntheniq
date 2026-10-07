@@ -28,6 +28,12 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     const project = await db.getProject(id);
     if (!project) return reply.code(404).send({ error: 'Project not found' });
 
+    const contentLength = req.headers['content-length'];
+    const maxSize = MAX_UPLOAD_MB * 1024 * 1024;
+    if (contentLength && Number(contentLength) > maxSize) {
+      return reply.code(413).send({ error: `File exceeds the ${MAX_UPLOAD_MB} MB limit` });
+    }
+
     let file;
     try {
       file = await req.file();

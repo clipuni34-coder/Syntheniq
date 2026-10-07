@@ -476,6 +476,11 @@ function UploadView({
 
   const upload = async (file: File) => {
     if (busy) return;
+    const MAX_BYTES = 2 * 1024 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      notify(`File is ${(file.size / 1024 / 1024).toFixed(0)} MB — exceeds the 2 GB limit. Trim or compress your video.`, 'error');
+      return;
+    }
     setBusy(true);
     setProgress({ loaded: 0, total: file.size, name: file.name });
     try {
