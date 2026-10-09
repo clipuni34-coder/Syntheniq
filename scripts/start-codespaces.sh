@@ -13,12 +13,6 @@ npm run build:web
 echo "[codespace] Building API..."
 npm run build:api
 
-echo "[codespace] Installing ffmpeg and espeak-ng..."
-if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update -qq
-  sudo apt-get install -y -qq ffmpeg espeak-ng
-fi
-
 echo "[codespace] Starting Syntheniq API + engine on port 8787..."
 export PORT=8787
 export WEB_OUT_DIR="$(pwd)/apps/web/out"
@@ -29,7 +23,7 @@ echo $! > /tmp/syntheniq.pid
 echo "[codespace] Waiting for server to be ready..."
 for i in $(seq 1 30); do
   if curl -sf "http://localhost:8787/v1/health" >/dev/null 2>&1; then
-    echo "[codespace] Server is ready at https://localhost:8787"
+    echo "[codespace] Server is ready at http://localhost:8787"
     break
   fi
   sleep 1
@@ -37,5 +31,4 @@ done
 
 echo "[codespace] Logs:"
 cat /tmp/syntheniq.log
-
 echo "[codespace] Server PID: $(cat /tmp/syntheniq.pid)"
