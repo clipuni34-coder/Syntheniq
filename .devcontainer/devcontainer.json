@@ -2,7 +2,7 @@
   "name": "Syntheniq",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20-bookworm",
   "features": {
-    "ghcr.io/devcontainers/features/common-util:2": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {},
     "ghcr.io/devcontainers/features/ffmpeg:1": {}
   },
   "hostRequirements": {
