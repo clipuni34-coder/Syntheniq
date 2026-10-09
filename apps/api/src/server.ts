@@ -17,6 +17,7 @@ const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   requestTimeout: 0,
   handlerTimeout: 0,
+  bodyLimit: 0,
 });
 
 // Override server-level timeouts directly on the HTTP server.
