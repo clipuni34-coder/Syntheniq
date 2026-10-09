@@ -13,7 +13,11 @@ import { isProjectId, listProjects, loadJob, newJobState, projectDir, saveJob } 
 import { cancelPipeline, getActiveJob, startPipeline } from './jobs.js';
 import { AiRouter } from './ai/router.js';
 
-const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
+const app = Fastify({
+  logger: { level: process.env.LOG_LEVEL || 'info' },
+  requestTimeout: 0,
+  keepAliveTimeout: 0,
+});
 
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
