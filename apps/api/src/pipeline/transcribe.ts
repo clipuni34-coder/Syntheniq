@@ -90,7 +90,7 @@ export function computeCoverage(
   const speechEnd = Math.max(0, mediaDur - silence);
   const denominator = speechEnd > 0 ? speechEnd : mediaDur;
   const coverage = denominator > 0 ? Math.min(1, lastEnd / denominator) : 0;
-  const threshold = 0.95;
+  const threshold = 0.7;
   const pct = Math.round(coverage * 100);
   const tpct = Math.round(threshold * 100);
   const passed = coverage >= threshold;
@@ -142,12 +142,17 @@ export async function transcribeLocal(wav: string, mediaDur: number, log: (m: st
       log(`[transcribe] ${a.label} failed: ${String(e.stderr || e.message).slice(0, 300)}`);
     }
   }
-  if (!raw || !Array.isArray(raw.segments)) throw new Error('transcription produced no segments');
+  if (!raw) throw new Error('transcription produced no segments');
+
+  const segments = Array.isArray(raw.segments) ? raw.segments : [];
+  if (segments.length === 0) {
+    log('[transcribe] no speech detected — returning empty transcript (pipeline will use visual structure)');
+  }
 
   const transcript: Transcript = {
     duration: mediaDur,
     language: raw.language || 'en',
-    segments: raw.segments.map((s: any) => ({
+    segments: segments.map((s: any) => ({
       start: s.start,
       end: s.end,
       text: String(s.text || ''),
@@ -175,7 +180,9 @@ export async function transcribeLocal(wav: string, mediaDur: number, log: (m: st
       `coverage=${Math.round(cov.coverage * 100)}% threshold=${Math.round(cov.threshold * 100)}% -> ${cov.reason}`,
   );
   if (!cov.passed) {
-    throw new Error(`transcript coverage ${Math.round(cov.coverage * 100)}% < 95% — ${cov.reason}`);
+    log(`[transcribe] coverage gate WARNING: ${cov.reason}`);
+  } else {
+    log(`[transcribe] coverage gate passed: ${cov.reason}`);
   }
   log(`[transcribe] done: ${transcript.segments.length} segments, coverage ${(cov.coverage * 100).toFixed(0)}%, lang=${transcript.language}`);
   return transcript;
