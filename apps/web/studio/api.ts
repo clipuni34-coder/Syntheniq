@@ -89,8 +89,9 @@ export function apiBase(): string {
     // the web port in the hostname with 8787.
     const host = window.location.hostname;
     const webPort = window.location.port;
-    if (webPort !== '8787' && host.includes('preview.app.github.com')) {
-      // Pattern: codespace-name-<port>.preview.app.github.com
+    if (webPort !== '8787' && host.includes('preview.app.github.')) {
+      // Codespaces preview URL: codespace-name-<port>.preview.app.github.dev
+      // Replace the web port in hostname to reach the API on 8787.
       return window.location.protocol + '//' + host.replace(webPort, '8787');
     }
   }

@@ -1,0 +1,21 @@
+{
+  "name": "Syntheniq",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/common-util:2": {},
+    "ghcr.io/devcontainers/features/ffmpeg:1": {}
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storageInGb": 32
+  },
+  "forwardPorts": [8787],
+  "postCreateCommand": "bash scripts/start-codespaces.sh",
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["apps/api/src/server.ts", "apps/web/studio/api.ts"]
+    }
+  },
+  "remoteUser": "node"
+}

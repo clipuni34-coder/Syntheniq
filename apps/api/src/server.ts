@@ -170,8 +170,8 @@ async function main(): Promise<void> {
   // up by the worker (leases recover orphaned claims automatically).
   const app = await buildApp();
   const { OPENAI_API_KEY } = await import('./config.js');
-  await app.listen({ port: PORT, host: '0.0.0.0' });
-  console.log(`[syntheniq] api listening on http://0.0.0.0:${PORT}`);
+  await app.listen({ port: PORT, host: '::' });
+  console.log(`[syntheniq] api listening on http://localhost:${PORT} (IPv4 + IPv6)`);
   console.log(
     `[syntheniq] store=${storeKind()} storage=${getStorage().kind} worker=${API_ONLY ? 'external' : 'embedded'} ` +
       `whisper=${OPENAI_API_KEY ? 'openai-api' : 'local-or-fallback'}`
