@@ -16,6 +16,7 @@ export const DATA_DIR =
   process.env.SYNTHENIQ_DATA || process.env.DATA_DIR || path.join(ROOT, 'data');
 export const PORT = int('PORT', 8787);
 export const MAX_UPLOAD_MB = int('MAX_UPLOAD_MB', 2048);
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'whisper-1';

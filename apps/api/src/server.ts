@@ -11,6 +11,7 @@ import {
   DATA_DIR,
   JOB_LEASE_SEC,
   JOB_MAX_ATTEMPTS,
+  MAX_UPLOAD_BYTES,
   MAX_UPLOAD_MB,
   PORT,
   STORAGE_DRIVER,
@@ -45,7 +46,21 @@ async function readVersion(): Promise<string> {
 }
 
 export async function buildApp() {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    bodyLimit: MAX_UPLOAD_BYTES,
+    requestTimeout: 0,
+    handlerTimeout: 0,
+  });
+
+  // Override server-level timeouts directly on the HTTP server.
+  // Fastify's config validator does NOT properly apply keepAliveTimeout: 0
+  // (it falls back to the 72s default), which kills long uploads with >72s
+  // data gaps → browser sees xhr.onerror ("network error").
+  const _srv = app.server as any;
+  _srv.requestTimeout = 0;
+  _srv.keepAliveTimeout = 0;
+  _srv.headersTimeout = 0;
 
   // Fail fast on misconfigured persistence/storage instead of half-booting.
   await getStore();
@@ -53,7 +68,7 @@ export async function buildApp() {
 
   await app.register(cors, { origin: WEB_ORIGIN || true });
   await app.register(multipart, {
-    limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: 1 },
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   });
 
   app.setErrorHandler((err: any, req, reply) => {
