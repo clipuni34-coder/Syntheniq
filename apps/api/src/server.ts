@@ -16,8 +16,18 @@ import { AiRouter } from './ai/router.js';
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   requestTimeout: 0,
-  keepAliveTimeout: 0,
+  handlerTimeout: 0,
 });
+
+// Override server-level timeouts directly on the HTTP server.
+// Fastify's config validator does NOT properly apply keepAliveTimeout: 0
+// (it falls back to the 72s default), which kills long uploads with >72s
+// data gaps → browser sees xhr.onerror ("network error").
+const _srv = app.server;
+_srv.requestTimeout = 0;
+_srv.keepAliveTimeout = 0;
+_srv.headersTimeout = 0;
+_srv.requestTimeout = 0;
 
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
