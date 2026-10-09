@@ -8,7 +8,15 @@
     "memory": "8gb",
     "storageInGb": 32
   },
-  "forwardPorts": [8787],
+  "forwardPorts": [
+    3000
+  ],
+  "portsAttributes": {
+    "3000": {
+      "label": "Syntheniq — open in browser",
+      "onAutoForward": "notify"
+    }
+  },
   "postCreateCommand": "bash scripts/start-codespaces.sh",
   "customizations": {
     "codespaces": {
