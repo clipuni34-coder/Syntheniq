@@ -83,6 +83,16 @@ export function apiBase(): string {
   if (typeof window !== 'undefined') {
     // Single-origin mode: the API serves the built web app itself.
     if (window.location.port === '8787') return window.location.origin;
+    // GitHub Codespaces: detect forwarded port pattern.
+    // The web app runs on one forwarded port, API on another (8787).
+    // If we're in a codespace preview, derive the API URL by replacing
+    // the web port in the hostname with 8787.
+    const host = window.location.hostname;
+    const webPort = window.location.port;
+    if (webPort !== '8787' && host.includes('preview.app.github.com')) {
+      // Pattern: codespace-name-<port>.preview.app.github.com
+      return window.location.protocol + '//' + host.replace(webPort, '8787');
+    }
   }
   return 'http://localhost:8787';
 }
