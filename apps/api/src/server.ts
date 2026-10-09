@@ -13,11 +13,13 @@ import { isProjectId, listProjects, loadJob, newJobState, projectDir, saveJob } 
 import { cancelPipeline, getActiveJob, startPipeline } from './jobs.js';
 import { AiRouter } from './ai/router.js';
 
+export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   requestTimeout: 0,
   handlerTimeout: 0,
-  bodyLimit: 0,
+  bodyLimit: MAX_UPLOAD_BYTES,
 });
 
 // Override server-level timeouts directly on the HTTP server.
@@ -29,8 +31,6 @@ _srv.requestTimeout = 0;
 _srv.keepAliveTimeout = 0;
 _srv.headersTimeout = 0;
 _srv.requestTimeout = 0;
-
-export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 await app.register(cors, { origin: true });
 await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
