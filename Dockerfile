@@ -45,7 +45,6 @@ ENV NODE_ENV=production \
   WEB_OUT_DIR=/repo/apps/api/web-out
 
 RUN mkdir -p /repo/apps/api/data
-
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
