@@ -1,0 +1,9 @@
+{
+  "deploy": {
+    "startCommand": "bash apps/api/start.sh",
+    "healthcheck": {
+      "path": "/v1/health",
+      "interval": "60"
+    }
+  }
+}
