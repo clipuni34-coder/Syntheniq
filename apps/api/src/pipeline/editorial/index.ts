@@ -2,7 +2,7 @@
 import { scoreCandidate, speechRatioInRange, type Candidate, type ScoreContext } from './features.js';
 import type { Clip, Segment, StructureData } from '../../types.js';
 
-const MIN_CLIP = 18;
+const MIN_CLIP = 5;
 const MAX_CLIP = 62;
 const TARGETS = [25, 35, 45];
 
@@ -59,7 +59,7 @@ export function generateCandidates(
         if (candidates.length > 400) break;
       }
     }
-    if (!candidates.length && duration > 4) {
+    if (!candidates.length && duration > 0) {
       candidates.push({ start: 0, end: round2(Math.min(duration, 45)), text: '', sentences: [] });
     }
     return candidates;

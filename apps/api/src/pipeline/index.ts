@@ -23,7 +23,9 @@ import {
   type LlmProvider,
 } from './editorial/llm.js';
 import { buildCaptionEvents, writeASS } from './render/captions.js';
-import { renderClip, verifyExport, extractPoster } from './render/index.js';
+import { extractPoster } from './render/index.js';
+import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
+import { verifyExport } from './editorial/qc.js';
 import type {
   AnalysisData,
   JobPublic,
@@ -41,6 +43,12 @@ export const MSG = {
   BUILD: 'Building your clips',
   FINISH: 'Finishing your edits',
 };
+
+function atomicWriteJSON(filePath: string, data: unknown): void {
+  const tmp = `${filePath}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, filePath);
+}
 
 // Local working copy first; in R2 mode restore from durable storage when the
 // local file is gone (another worker, fresh deploy, restarted disk).
@@ -70,11 +78,16 @@ export async function readAnalysis(projectId: string): Promise<AnalysisData> {
   if (!fs.existsSync(file)) {
     throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
   }
-  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!data || typeof data !== 'object') {
-    throw Object.assign(new Error('Analysis file is corrupted — run analysis again'), { statusCode: 500 });
+  let data: AnalysisData | null = null;
+  try {
+    data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    throw Object.assign(new Error('Analysis file is corrupt — re-run analysis'), { statusCode: 500 });
   }
-  return data as AnalysisData;
+  if (!data || !data.clips) {
+    throw Object.assign(new Error('No analysis found — run analysis first'), { statusCode: 409 });
+  }
+  return data;
 }
 
 export interface RecoverGapsInput {
@@ -344,7 +357,7 @@ export async function runAnalysis(
       stats,
       notes,
     };
-    fs.writeFileSync(p.analysisPath(projectId), JSON.stringify(analysis));
+    atomicWriteJSON(p.analysisPath(projectId), analysis);
     if (isR2()) {
       // Durability is load-bearing in production (any replica must read it).
       await getStorage().mirror(p.analysisPath(projectId), keys.analysis(projectId));
@@ -403,19 +416,34 @@ export async function runExport(projectId: string, clipId: string, jobId: string
     const assFile = clip.captions && clip.captions.file ? path.join(dir, clip.captions.file) : null;
     const outFile = p.exportPath(projectId, clipId);
 
-    await renderClip({
+    const treatmentInput: BuildTreatmentInput = {
       input,
-      start: clip.start,
-      duration: clip.end - clip.start,
-      assFile: assFile && fs.existsSync(assFile) ? assFile : null,
-      outFile,
-      onProgress: (frac: number) => {
-        jobs.updateJob(jobId, { progress: 6 + Math.round(frac * 82), message: MSG.BUILD }).catch(() => undefined);
+      clip: {
+        start: clip.start,
+        end: clip.end,
+        id: clip.id,
+        title: clip.title,
+        scores: { emotion: clip.scores.emotion },
       },
+      analysis,
+      outDir: dir,
+    };
+
+    const treatmentResult = await renderWithTreatment(treatmentInput, { assFile }, (frac: number) => {
+      jobs.updateJob(jobId, { progress: 6 + Math.round(frac * 82), message: MSG.BUILD }).catch(() => undefined);
     });
 
+    if (!treatmentResult.verified) {
+      jobs.updateJob(jobId, { progress: 90, message: 'Retrying render with repair mode' }).catch(() => undefined);
+      const { repairExport } = await import('./editorial/qc.js');
+      const repair = await repairExport(outFile, input, clip.start, clip.end - clip.start, outFile, assFile);
+      if (!repair.success) {
+        throw new Error(`Export repair failed: ${repair.issues.join(', ')}`);
+      }
+    }
+
     await jobs.updateJob(jobId, { progress: 92, message: MSG.FINISH });
-    const verification = await verifyExport(outFile);
+    const verification = await verifyExport(outFile, { requireAudio: false });
     if (!verification.ok) {
       throw new Error(`Export failed verification: ${JSON.stringify(verification.checks)}`);
     }
@@ -432,7 +460,7 @@ export async function runExport(projectId: string, clipId: string, jobId: string
       verified: verification.details,
       exportedAt: new Date().toISOString(),
     };
-    fs.writeFileSync(p.analysisPath(projectId), JSON.stringify(analysis));
+    atomicWriteJSON(p.analysisPath(projectId), analysis);
     if (isR2()) {
       await getStorage().mirror(p.analysisPath(projectId), keys.analysis(projectId));
     }

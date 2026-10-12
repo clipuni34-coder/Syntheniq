@@ -62,3 +62,45 @@ export const CTA_PHRASES = [
 ];
 
 export const FILLERS = ['um', 'uh', 'uhm', 'erm', 'like', 'you know', 'i mean', 'basically', 'actually'];
+
+export const EMOTION_CRISIS = [
+  'problem', 'struggle', 'challenge', 'obstacle', 'difficulty', 'issue',
+  'mistake', 'error', 'failure', 'failed', 'fall', 'fallen', 'lose', 'lost',
+  'pain', 'painful', 'hurt', 'suffer', 'suffering', 'struggle', 'battle',
+  'fight', 'fighting', 'war', 'conflict', 'tension', 'stress', 'crisis',
+  'breakdown', 'breaking', 'hard', 'harder', 'hardest', 'tough', 'tougher',
+  'struggling', 'blew up', 'blew', 'explode', 'crashed', 'crash',
+];
+
+export const EMOTION_REVELATION = [
+  'realize', 'realised', 'realize', 'realized', 'discovery', 'discovered',
+  'reveal', 'revealed', 'revealing', 'truth', 'secret', 'secrets',
+  'unveil', 'unveiled', 'uncover', 'uncovered', 'hidden', 'find', 'found',
+  'aha', 'moment', 'epiphany', 'insight', 'understand', 'understood',
+  'suddenly', 'unexpected', 'shocking', 'surprising', 'revelation',
+  'breakthrough', 'eureka', 'clarity', 'enlighten', 'enlightened',
+];
+
+export const EMOTION_RECOVERY = [
+  'recover', 'recovered', 'recovery', 'heal', 'healed', 'healing',
+  'move on', 'moving on', 'overcome', 'overcame', 'conquer', 'conquered',
+  'rise', 'rose', 'rising', 'resilience', 'resilient', 'strength',
+  'strong', 'stronger', 'strongest', 'better', 'improve', 'improved',
+  'growth', 'grow', 'grew', 'journey', 'progress', 'progressed',
+  'forward', 'ahead', 'optimism', 'hope', 'hoping', 'positive',
+];
+
+export const EMOTION_TAGS: Record<string, { keywords: string[] }> = {
+  crisis: { keywords: EMOTION_CRISIS },
+  revelation: { keywords: EMOTION_REVELATION },
+  recovery: { keywords: EMOTION_RECOVERY },
+  positive: { keywords: EMOTION_POSITIVE },
+  negative: { keywords: EMOTION_NEGATIVE },
+};
+
+export const TRAJECTORY_KEYWORDS: Record<string, string[]> = {
+  escalating: ['build', 'escalate', 'intensify', 'increase', 'grow', 'rising', 'tension', 'climax'],
+  declining: ['wind', 'down', 'decline', 'decrease', 'fade', 'diminish', 'settle', 'calm'],
+  volatile: ['volatile', 'emotional', 'rollercoaster', 'ups', 'downs', 'wild', 'intense'],
+  flat: ['flat', 'consistent', 'steady', 'stable', 'constant'],
+};
