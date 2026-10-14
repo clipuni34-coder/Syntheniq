@@ -9,6 +9,7 @@ import { createWriteStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../config.js';
 import * as db from '../lib/db.js';
+import * as jobs from '../lib/jobs.js';
 import { sourceDir, ensureDir } from '../lib/paths.js';
 import { getStorage, isR2, keys } from '../storage/index.js';
 import { probeMedia } from '../pipeline/probe.js';
@@ -127,5 +128,41 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     });
     reply.code(201);
     return updated;
+  });
+
+  app.post('/v1/projects/:id/import', async (req, reply) => {
+    const id = safeId((req.params as { id: string }).id);
+    const project = await db.getProject(id);
+    if (!project) return reply.code(404).send({ error: 'Project not found' });
+
+    const body = (req.body || {}) as { url?: string };
+    if (!body.url || !body.url.trim()) {
+      return reply.code(400).send({ error: 'A "url" field is required' });
+    }
+    const url = body.url.trim();
+    try {
+      new URL(url);
+    } catch {
+      return reply.code(400).send({ error: 'Invalid URL' });
+    }
+
+    // Idempotent: if a download is already running for this project, re-attach.
+    const active = await jobs.findActiveJob('download', id);
+    if (active) {
+      await db.updateProject(id, { activeJob: { id: active.id, type: 'download' } });
+      reply.code(202);
+      return { jobId: active.id, job: active };
+    }
+    if (project.activeJob?.type === 'download') {
+      await db.updateProject(id, { activeJob: null });
+    }
+
+    const job = await jobs.createJob('download', `Download ${url}`, {
+      projectId: project.id,
+      url,
+    });
+    await db.updateProject(id, { activeJob: { id: job.id, type: 'download' } });
+    reply.code(202);
+    return { jobId: job.id, job };
   });
 }

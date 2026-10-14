@@ -83,6 +83,11 @@ export function apiBase(): string {
   if (typeof window !== 'undefined') {
     // Single-origin mode: the API serves the built web app itself.
     if (window.location.port === '8787') return window.location.origin;
+    // Cloudflare Tunnel: the page is served from https://<sub>.trycloudflare.com
+    // but apiBase() fell through to localhost:8787, producing a cross-origin video
+    // load that Safari blocks with "Unsupported media type". Return the tunnel
+    // origin so every request (API + media) stays same-origin.
+    if (window.location.hostname.endsWith('.trycloudflare.com')) return window.location.origin;
     // GitHub Codespaces: detect forwarded port pattern.
     // The web app runs on one forwarded port, API on another (8787).
     // If we're in a codespace preview, derive the API URL by replacing
@@ -139,6 +144,13 @@ export function uploadVideo(
     form.append('video', file, file.name);
     xhr.send(form);
   });
+}
+
+export function importFromUrl(projectId: string, url: string): Promise<{ jobId: string; job: Job }> {
+  return api<{ jobId: string; job: Job }>(
+    `/v1/projects/${encodeURIComponent(projectId)}/import`,
+    { method: 'POST', body: JSON.stringify({ url }) }
+  );
 }
 
 export function followJob(

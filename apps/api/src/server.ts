@@ -66,7 +66,10 @@ export async function buildApp() {
   await getStore();
   getStorage();
 
-  await app.register(cors, { origin: WEB_ORIGIN || true });
+  // Safari's media engine treats cross-origin video requests as tainted when
+  // credentials are in play. credentials: false lets the wildcard origin
+  // reflect work for <video>/src loads without opaque-blocking the body.
+  await app.register(cors, { origin: WEB_ORIGIN || true, credentials: false });
   await app.register(multipart, {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   });

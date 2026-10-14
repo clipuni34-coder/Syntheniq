@@ -52,6 +52,11 @@ export const OPENAI_EDITORIAL_MODEL = process.env.OPENAI_EDITORIAL_MODEL || 'gpt
 export const OPENAI_TIMEOUT_MS = int('OPENAI_TIMEOUT_MS', 60000);
 export const LLM_TOP_K = int('LLM_TOP_K', 40);
 
+// --- yt-dlp (YouTube / URL imports) ---
+export const YTDLP_COOKIES = process.env.YTDLP_COOKIES || '';
+export const YTDLP_BINARY = process.env.YTDLP_BINARY || 'python3';
+export const YTDLP_MODULE = process.env.YTDLP_MODULE || 'yt_dlp';
+
 // --- Workers ---
 export const WORKER_CONCURRENCY = int('WORKER_CONCURRENCY', 1);
 export const WORKER_POLL_MS = int('WORKER_POLL_MS', 1000);

@@ -13,6 +13,7 @@ import {
   fmtDate,
   mediaUrl,
   uploadVideo,
+  importFromUrl,
 } from './api';
 import type { Clip, ClipsData, Job, Project, Scores, Segment } from './api';
 import { notify, subscribeToasts } from './toast';
@@ -421,6 +422,17 @@ function ProjectHub({ projectId }: { projectId: string }) {
       </div>
     );
   }
+  if (project.status === 'downloading' && project.activeJob) {
+    return (
+      <AnalyzingView
+        project={project}
+        jobId={project.activeJob.id}
+        exportClipId={null}
+        onSettled={refetch}
+        onDeleted={() => go('#/projects')}
+      />
+    );
+  }
   if (project.status === 'analyzing' && project.activeJob) {
     return (
       <AnalyzingView
@@ -454,7 +466,16 @@ async function startAnalysis(project: Project, onStarted: () => void): Promise<v
     });
     onStarted();
   } catch (err) {
-    notify((err as Error).message);
+    notify(err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function startDownload(project: Project, url: string, onStarted: () => void): Promise<void> {
+  try {
+    await importFromUrl(project.id, url);
+    onStarted();
+  } catch (err) {
+    notify(err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -470,6 +491,8 @@ function UploadView({
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<{ loaded: number; total: number; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlBusy, setUrlBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const media = project.media;
   const probe = media?.probe;
@@ -569,6 +592,38 @@ function UploadView({
             />
           </div>
         </>
+      )}
+
+      {!media && !progress && (
+        <div className="url-import">
+          <div className="url-sep">
+            <span>or paste a URL</span>
+          </div>
+          <div className="url-row">
+            <input
+              type="url"
+              placeholder="https://youtu.be/...  (YouTube, Vimeo, etc.)"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              disabled={urlBusy}
+              onKeyDown={(e) => e.key === 'Enter' && !urlBusy && !!urlInput.trim() && void startDownload(project, urlInput.trim(), onChanged)}
+            />
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={urlBusy || !urlInput.trim()}
+              onClick={() => {
+                if (!urlInput.trim()) return;
+                setUrlBusy(true);
+                void startDownload(project, urlInput.trim(), () => {
+                  setUrlBusy(false);
+                  setUrlInput('');
+                });
+              }}
+            >
+              <Download size={15} /> Import
+            </button>
+          </div>
+        </div>
       )}
 
       {media && !progress && (
@@ -685,13 +740,17 @@ function AnalyzingView({
 
   return (
     <div className="view">
-      <ProjectHead project={project} active={exportClipId ? 'export' : 'analyzing'} onDeleted={onDeleted} />
+      <ProjectHead
+        project={project}
+        active={project.status === 'downloading' ? 'upload' : exportClipId ? 'export' : 'analyzing'}
+        onDeleted={onDeleted}
+      />
       <div className="analyze-stage">
         <p className="eyebrow">
-          {exportClipId ? 'Exporting' : 'Analyzing'} · {project.name}
+          {project.status === 'downloading' ? 'Downloading' : exportClipId ? 'Exporting' : 'Analyzing'} · {project.name}
         </p>
         <div className="status-line">
-          <span>{job?.message || 'Understanding your video'}</span>
+          <span>{job?.message || (project.status === 'downloading' ? 'Fetching from URL' : 'Understanding your video')}</span>
           <span className="caret">_</span>
         </div>
         <div className="analyze-sub">

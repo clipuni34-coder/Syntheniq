@@ -167,6 +167,7 @@ h1 em, h2 em { font-style: italic; color: var(--gold); }
 }
 .status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
 .status-pill.uploaded::before { background: #7aa5ff; }
+.status-pill.downloading::before { background: #ff8c42; animation: pulse 1.2s ease-in-out infinite; }
 .status-pill.analyzing::before { background: var(--gold); animation: pulse 1.2s ease-in-out infinite; }
 .status-pill.clips-ready { color: var(--ok); }
 .status-pill.clips-ready::before { background: var(--ok); }
@@ -395,6 +396,22 @@ video.stage {
   border-radius: 14px; padding: 15px 18px; color: var(--ink); font-size: 16px; font-family: inherit;
 }
 .field input:focus { outline: none; border-color: var(--gold); }
+
+/* URL import ----------------------------------------------------------------- */
+.url-import { margin-top: 36px; }
+.url-sep {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+  color: var(--dim); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.url-sep::before, .url-sep::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+.url-row { display: flex; gap: 12px; align-items: stretch; }
+.url-row input[type="url"] {
+  flex: 1; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line);
+  border-radius: 14px; padding: 13px 18px; color: var(--ink); font-size: 15px; font-family: inherit;
+}
+.url-row input[type="url"]:focus { outline: none; border-color: var(--gold); }
+.url-row input[type="url"]::placeholder { color: var(--dim); }
+.url-row .btn { flex: none; }
 
 .toast-root { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 200; display: grid; gap: 10px; width: min(520px, calc(100vw - 40px)); }
 .toast {

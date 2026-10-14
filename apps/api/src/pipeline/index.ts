@@ -26,6 +26,7 @@ import { buildCaptionEvents, writeASS } from './render/captions.js';
 import { extractPoster } from './render/index.js';
 import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
 import { verifyExport } from './editorial/qc.js';
+import { downloadFromUrl } from '../lib/download.js';
 import type {
   AnalysisData,
   JobPublic,
@@ -36,6 +37,7 @@ import type {
 } from '../types.js';
 
 export const MSG = {
+  DOWNLOAD: 'Downloading from URL',
   UNDERSTAND: 'Understanding your video',
   LISTEN: 'Listening for the strongest moments',
   RECOVER: 'Finding the missing moments',
@@ -177,6 +179,74 @@ export interface AnalysisOptions {
    * inject a fake in tests.
    */
   llm?: LlmProvider | null;
+}
+
+export async function runDownload(projectId: string, jobId: string, url: string): Promise<unknown> {
+  const notes: string[] = [];
+  try {
+    const project = await db.getProject(projectId);
+    if (!project) throw Object.assign(new Error('Project not found'), { statusCode: 404 });
+
+    await jobs.updateJob(jobId, { progress: 5, message: MSG.DOWNLOAD });
+    await db.updateProject(projectId, { status: 'downloading', notes: [] });
+
+    const filename = await downloadFromUrl(url, projectId, (line) => {
+      notes.push(line);
+    });
+
+    await jobs.updateJob(jobId, { progress: 50, message: 'Probing downloaded video' });
+
+    const probe = await probeMedia(filename);
+    if (!probe.hasVideo || !(probe.duration > 0)) {
+      throw new Error('Downloaded file has no readable video stream');
+    }
+
+    // Keep a single current source per project.
+    const srcDir = p.sourceDir(projectId);
+    const keptName = path.basename(filename);
+    for (const f of fs.readdirSync(srcDir)) {
+      if (f !== keptName) fs.rmSync(path.join(srcDir, f), { force: true });
+    }
+
+    let r2Key: string | undefined;
+    if (isR2()) {
+      try {
+        r2Key = (await getStorage().mirror(filename, keys.source(projectId, keptName))).key;
+      } catch (err) {
+        notes.push(`Durable backup failed (local copy kept): ${(err as Error).message}`);
+      }
+    }
+
+    await db.updateProject(projectId, {
+      status: 'uploaded',
+      notes,
+      analysis: null,
+      media: {
+        filename: keptName,
+        r2Key,
+        originalName: keptName,
+        bytes: fs.statSync(filename).size,
+        mime: 'video/mp4',
+        probe,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    await jobs.updateJob(jobId, { progress: 96, message: 'Download complete' });
+    return jobs.finishJob(jobId, {
+      projectId,
+      filename: keptName,
+      bytes: fs.statSync(filename).size,
+      probe,
+    });
+  } catch (err) {
+    try {
+      await db.updateProject(projectId, { status: 'error', activeJob: null, notes: [...notes, (err as Error).message] });
+    } catch {
+      // ignore
+    }
+    return jobs.failJob(jobId, err);
+  }
 }
 
 export async function runAnalysis(
@@ -487,6 +557,16 @@ export async function runExport(projectId: string, clipId: string, jobId: string
 // standalone worker processes (production scale-out).
 export function jobHandlers(): Record<string, (job: JobPublic) => Promise<unknown>> {
   return {
+    download: async (job: JobPublic) => {
+      const meta = (job.meta || {}) as { projectId?: unknown; url?: unknown };
+      if (typeof meta.projectId !== 'string' || !meta.projectId) {
+        throw new Error('download job is missing meta.projectId');
+      }
+      if (typeof meta.url !== 'string' || !meta.url) {
+        throw new Error('download job is missing meta.url');
+      }
+      await runDownload(meta.projectId, job.id, meta.url);
+    },
     analyze: async (job: JobPublic) => {
       const meta = (job.meta || {}) as { projectId?: unknown; maxClips?: unknown };
       if (typeof meta.projectId !== 'string' || !meta.projectId) {

@@ -62,9 +62,15 @@ export async function sendFileWithRange(
   const range = parseRange(req.headers.range, size);
   reply.header('Accept-Ranges', 'bytes');
   reply.header('Content-Type', contentTypeFor(absPath));
-  if (opts.downloadName) {
-    reply.header('Content-Disposition', `attachment; filename="${opts.downloadName}"`);
-  }
+  // Safari blocks inline <video> playback when no Content-Disposition is present
+  // on cross-origin-style requests. Explicitly declare inline so Safari's media
+  // engine inspects the body instead of treating it as an opaque download.
+  reply.header('Content-Disposition', opts.downloadName
+    ? `attachment; filename="${opts.downloadName}"`
+    : 'inline');
+  // Prevent Safari from caching an opaque video response and then re-serving it
+  // on retry, which surfaces as "Unsupported media type" after an export retry.
+  reply.header('Cache-Control', 'no-store');
   if (range) {
     reply.code(206);
     reply.header('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
@@ -98,7 +104,16 @@ export function staticRoot(root: string) {
       reply.code(404).send({ error: 'Not found' });
       return;
     }
-    reply.header('Content-Type', contentTypeFor(file));
+    // Safari aggressively caches JS/CSS bundles. Without explicit no-store,
+    // a stale bundle (pointing at a wrong video endpoint) survives a rebuild
+    // and yields "Unsupported media type" on the next export playback.
+    const ct = contentTypeFor(file);
+    if (ct.startsWith('text/css') || ct.startsWith('text/javascript') || ct.startsWith('application/json')) {
+      reply.header('Cache-Control', 'no-store');
+    } else {
+      reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    reply.header('Content-Type', ct);
     return reply.send(fs.createReadStream(file));
   };
 }
