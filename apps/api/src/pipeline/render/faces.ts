@@ -135,10 +135,11 @@ export function buildFaceHighlightFilters(
   const filters: string[] = [];
   const keyframes: Array<{ t: number; type: string }> = [];
 
-      // Scale face coordinates from detection frame (320px width) to export resolution
+        // Scale face coordinates from detection frame (320px width) to export resolution
   const DETECTION_WIDTH = 320;
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
   const scaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
-  const scaleY = scaleX; // Detection maintains aspect ratio
+  const scaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
 
   for (const face of faces.slice(0, 3)) {
     const x = Math.round(face.x * scaleX);
@@ -165,9 +166,11 @@ export function buildBackgroundBlurFilters(
 
   const blurRadius = opts.backgroundBlur;
   const firstFace = faces[0];
-  // Scale coordinates to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+  // Scale coordinates from detection frame (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
+  const scaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const scaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
   const x = Math.round(firstFace.x * scaleX);
   const y = Math.round(firstFace.y * scaleY);
   const w = Math.max(1, Math.round(firstFace.width * scaleX));
@@ -197,13 +200,14 @@ export function buildSmartCropFilters(
   }
 
   const firstFace = faces[0];
-  // Scale face coordinates from detection resolution (320px width) to export resolution
+  // Scale face coordinates from detection frame (320px width) to export resolution
   const DETECTION_WIDTH = 320;
-  const detScaleX = width / DETECTION_WIDTH;
-  const detScaleY = height / (DETECTION_WIDTH * height / width);
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
+  const exportScaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const exportScaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
   
-  const centerX = (firstFace.x + firstFace.width / 2) * detScaleX;
-  const centerY = (firstFace.y + firstFace.height / 2) * detScaleY;
+  const centerX = (firstFace.x + firstFace.width / 2) * exportScaleX;
+  const centerY = (firstFace.y + firstFace.height / 2) * exportScaleY;
 
   // Clamp to valid range
   const cropW = Math.min(width, EXPORT_SPEC.width);
