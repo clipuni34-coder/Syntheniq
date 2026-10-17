@@ -90,7 +90,7 @@ function buildMotionFilters(
   });
 
   for (const cue of safeCues) {
-    const t = cue.t;
+    const t = r2(cue.t - segmentStart);
     const dur = cue.duration;
 
     switch (cue.kind) {
@@ -110,9 +110,9 @@ function buildMotionFilters(
       case 'impact': {
         const alpha = clamp01((cue.intensity || 0.7) * 0.4);
         filters.push(
-          `drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,0,${dur.toFixed(1)})'`
-        );
-        keyframes.push({ t, type: 'impact_flash' });
+          `drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`
+         );
+         keyframes.push({ t, type: 'impact_flash' });
         break;
       }
 
@@ -132,7 +132,7 @@ function buildMotionFilters(
         const variant = cue.variant || 'flash';
         const alpha = clamp01((cue.intensity || 0.6) * 0.3);
         if (variant === 'flash') {
-          filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,0,${dur.toFixed(1)})'`);
+           filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`);
         }
         keyframes.push({ t, type: `transition_${variant}` });
         break;
@@ -154,11 +154,33 @@ function buildMotionFilters(
         if (cue.variant === 'action_text') {
           const text = (cue.word || cue.label).replace(/:/g, '');
           filters.push(
-            `drawbox=x=0:y=0:w=iw:h=80:color=black@0.7:t=fill:enable='between(t,0,${dur.toFixed(1)})':z=5,` +
-            `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=20:enable='between(t,0,${dur.toFixed(1)})':z=6`
+            `drawbox=x=0:y=0:w=iw:h=80:color=black@0.7:t=fill:enable='between(t,${t},${r2(t + dur)})',` +
+            `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=20:enable='between(t,${t},${r2(t + dur)})'`
           );
           keyframes.push({ t, type: 'action_text' });
         }
+        break;
+      }
+
+      case 'action_overlay': {
+        const text = (cue.word || cue.label).replace(/:/g, '');
+        const fontSize = 48 + Math.floor((cue.intensity || 0.6) * 24);
+        const alpha = clamp01((cue.intensity || 0.6) * 0.7);
+        filters.push(
+          `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=${fontSize}:fontcolor=white:box=1:boxcolor=black@${alpha.toFixed(2)}:boxborderw=6:x=(w-text_w)/2:y=(h-text_h)/3:enable='between(t,${t},${r2(t + dur)})'`
+        );
+        keyframes.push({ t, type: 'action_overlay' });
+        break;
+      }
+
+      case 'text_card': {
+        const text = (cue.word || cue.label).replace(/:/g, '');
+        const bgColor = cue.variant || '0x8B4513@0.8';
+        filters.push(
+          `drawbox=x=0:y=0:w=iw:h=ih:color=${bgColor}:t=fill:enable='between(t,${t},${r2(t + dur)})',` +
+          `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=64:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${t},${r2(t + dur)})'`
+        );
+        keyframes.push({ t, type: 'text_card' });
         break;
       }
     }
@@ -169,6 +191,10 @@ function buildMotionFilters(
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
+}
+
+function r2(v: number): number {
+  return Math.round(v * 100) / 100;
 }
 
 function buildSegmentFilters(

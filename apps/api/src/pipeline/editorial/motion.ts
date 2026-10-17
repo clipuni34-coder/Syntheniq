@@ -16,6 +16,8 @@ export type CueKind =
   | 'emphasis'
   | 'impact'
   | 'lower_third'
+  | 'action_overlay'
+  | 'text_card'
   | 'punch_in'
   | 'transition'
   | 'pulse'
@@ -175,10 +177,44 @@ function settleFilters(cue: MotionCue, media: MediaInfo): string[] {
   ];
 }
 
+function actionOverlayFilters(cue: MotionCue, media: MediaInfo): string[] {
+  const text = (cue.word || cue.label).replace(/:/g, '');
+  const intensity = safeNum(cue.intensity, 0.7);
+  const alpha = clamp(intensity * 0.7, 0.4, 0.8);
+  const fontSize = 72 + Math.floor(intensity * 24);
+  const tx = safeNum(cue.target?.x, media.width / 2) | 0;
+  const ty = safeNum(cue.target?.y, media.height / 2) | 0;
+  const dur = r2(cue.duration);
+
+  return [
+    `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='[${text}]':fontsize=${fontSize}:fontcolor=white:box=1:boxcolor=black@0.8:boxborderw=6:x=${tx}:y=${ty}:enable='between(t,0,${dur})'`,
+  ];
+}
+
+function textCardFilters(cue: MotionCue, media: MediaInfo): string[] {
+  const text = (cue.word || cue.label).replace(/:/g, '');
+  const bgColor = cue.variant || 'beige';
+  const colorMap: Record<string, string> = {
+    beige: '0x8B4513@0.8',
+    red: '0x8B0000@0.9',
+    black: '0x000000@0.95',
+    white: '0xFFFFFF@0.95',
+  };
+  const bg = colorMap[bgColor] || colorMap.beige;
+  const dur = r2(cue.duration);
+
+  return [
+    `drawbox=x=0:y=0:w=iw:h=ih:color=${bg}:t=fill:enable='between(t,0,${dur})'`,
+    `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=64:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,${dur})'`,
+  ];
+}
+
 const FILTER_BUILDERS: Record<CueKind, (cue: MotionCue, media: MediaInfo) => string[]> = {
   emphasis: emphasisFilters,
   impact: impactFilters,
   lower_third: lowerThirdFilters,
+  action_overlay: actionOverlayFilters,
+  text_card: textCardFilters,
   punch_in: punchInFilters,
   transition: transitionFilters,
   pulse: transitionFilters,
@@ -314,6 +350,7 @@ const ACTION_TEXTS = ['*STARTS RUNNING*', '*HUGS*', '*JUMPS IN*', '*PAUSES*', '*
 
 function deriveActionTextCues(
   beats: RetentionBeat[],
+  media: MediaInfo,
   duration: number
 ): MotionCue[] {
   const cues: MotionCue[] = [];
@@ -323,13 +360,14 @@ function deriveActionTextCues(
       if (intensity > 0.6 && beat.start < duration) {
         const actionText = ACTION_TEXTS[Math.floor(beat.start * 7) % ACTION_TEXTS.length];
         cues.push({
-          kind: 'lower_third',
+          kind: 'action_overlay',
           t: beat.start,
           duration: 1.5,
           intensity,
           label: actionText,
           word: actionText,
           variant: 'action_text',
+          target: { x: media.width / 2, y: media.height / 2 },
         });
       }
     }
@@ -345,7 +383,7 @@ export function planMotion(
 ): MotionPlan {
   const emotionCues = deriveCuesFromEmotion(emotionEvents, media, duration);
   const retentionCues = deriveCuesFromRetention(retentionBeats, media, duration);
-  const actionTextCues = deriveActionTextCues(retentionBeats, duration);
+  const actionTextCues = deriveActionTextCues(retentionBeats, media, duration);
 
   const allCues = [...emotionCues, ...retentionCues, ...actionTextCues];
   allCues.sort((a, b) => a.t - b.t);
