@@ -1196,7 +1196,7 @@ function ExportView({ projectId, clipId }: { projectId: string; clipId: string }
     startedRef.current = true;
     api<{ jobId: string; job: Job }>(
       `/v1/projects/${encodeURIComponent(projectId)}/clips/${encodeURIComponent(clipId)}/export`,
-      { method: 'POST' }
+      { method: 'POST', body: '{}' }
     )
       .then(({ jobId: id, job: j }) => {
         if (j?.status === 'done') {

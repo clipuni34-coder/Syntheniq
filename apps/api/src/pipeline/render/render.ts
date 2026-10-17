@@ -235,9 +235,9 @@ export async function buildVisualTreatment(
     kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
     faces: input.analysis.structure?.faceTrack || [],
     visualEffects: input.analysis.structure?.stats?.hasFace ? {
-      faceHighlight: 0.3,
-      backgroundBlur: 2,
-      smartCrop: true,
+      faceHighlight: 0.15,
+      backgroundBlur: 0,
+      smartCrop: false,
     } : {},
   });
 

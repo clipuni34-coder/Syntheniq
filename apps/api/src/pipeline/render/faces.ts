@@ -131,13 +131,14 @@ export function buildFaceHighlightFilters(
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
-  const color = opts.faceHighlightColor || '#00FF00@0.5';
+   const color = opts.faceHighlightColor || '#00FF00@0.15';
   const filters: string[] = [];
   const keyframes: Array<{ t: number; type: string }> = [];
 
-  // Scale face coordinates from detection resolution to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+      // Scale face coordinates from detection frame (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const scaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const scaleY = scaleX; // Detection maintains aspect ratio
 
   for (const face of faces.slice(0, 3)) {
     const x = Math.round(face.x * scaleX);
@@ -187,17 +188,26 @@ export function buildSmartCropFilters(
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
-  const firstFace = faces[0];
-  // Scale face coordinates from detection resolution to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+  // Only apply smart crop if the video isn't already 9:16 portrait.
+  // If the video matches the export aspect ratio, cropping just zooms in unnecessarily.
+  const exportAspect = EXPORT_SPEC.width / EXPORT_SPEC.height;
+  const mediaAspect = width / height;
+  if (Math.abs(exportAspect - mediaAspect) < 0.1) {
+    return { filters: [], keyframes: [] };
+  }
 
-  const centerX = (firstFace.x + firstFace.width / 2) * scaleX;
-  const centerY = (firstFace.y + firstFace.height / 2) * scaleY;
+  const firstFace = faces[0];
+  // Scale face coordinates from detection resolution (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const detScaleX = width / DETECTION_WIDTH;
+  const detScaleY = height / (DETECTION_WIDTH * height / width);
+  
+  const centerX = (firstFace.x + firstFace.width / 2) * detScaleX;
+  const centerY = (firstFace.y + firstFace.height / 2) * detScaleY;
 
   // Clamp to valid range
-  const cropW = EXPORT_SPEC.width;
-  const cropH = EXPORT_SPEC.height;
+  const cropW = Math.min(width, EXPORT_SPEC.width);
+  const cropH = Math.min(height, EXPORT_SPEC.height);
   const x = Math.max(0, Math.round(centerX - cropW / 2));
   const y = Math.max(0, Math.round(centerY - cropH / 2));
 
