@@ -6,7 +6,7 @@ import type { MotionCue } from '../editorial/motion.js';
 import { ensureDir } from '../../lib/paths.js';
 import { randomUUID } from 'node:crypto';
 
-export type SfxType = 'whoosh' | 'swoosh' | 'pop' | 'click' | 'hum' | 'tone' | 'impact';
+export type SfxType = 'whoosh' | 'swoosh' | 'pop' | 'click' | 'hum' | 'tone' | 'impact' | 'footsteps' | 'cheer' | 'swish';
 
 export interface SoundEffect {
   id: string;
@@ -36,6 +36,9 @@ const SFX_DURATIONS: Record<SfxType, number> = {
   hum: 3.0,
   tone: 1.0,
   impact: 0.5,
+  footsteps: 1.0,
+  cheer: 2.0,
+  swish: 0.8,
 };
 
 async function generateSfxFile(
@@ -74,6 +77,15 @@ async function generateSfxFile(
     case 'impact':
       filter = `anoisesrc=d=0.1:c=white,volume=${intensity}`;
       break;
+    case 'footsteps':
+      filter = `anoisesrc=d=${dur}:c=brown:volume=${intensity * 0.4},asetrate=48000*1.15`;
+      break;
+    case 'cheer':
+      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.5},vibrato=f=5:d=0.5,afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3`;
+      break;
+    case 'swish':
+      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.4},asetrate=48000*1.3,afade=t=out:st=${dur - 0.2}:d=0.2`;
+      break;
     default:
       filter = `sine=frequency=440:duration=${dur},volume=${intensity}`;
   }
@@ -109,10 +121,16 @@ export async function applySoundEffects(
   for (const cue of motionCues) {
     const intensity = Math.max(0.1, Math.min(1, (cue.intensity || 0.5) * 2));
 
-    const sfxType: SfxType = cue.kind === 'transition'
+    const sfxType: SfxType = cue.kind === 'transition' || cue.kind === 'punch_in'
       ? 'whoosh'
-      : cue.intensity && cue.intensity > 0.7 ? 'impact'
-      : cue.intensity && cue.intensity < 0.3 ? 'hum'
+      : cue.kind === 'impact'
+      ? 'impact'
+      : cue.intensity && cue.intensity > 0.8
+      ? 'cheer'
+      : cue.intensity && cue.intensity > 0.6
+      ? 'swish'
+      : cue.intensity && cue.intensity < 0.3
+      ? 'hum'
       : 'click';
 
     const id = randomUUID();

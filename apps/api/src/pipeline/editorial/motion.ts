@@ -310,6 +310,33 @@ function deriveCuesFromRetention(
   return cues;
 }
 
+const ACTION_TEXTS = ['*STARTS RUNNING*', '*HUGS*', '*JUMPS IN*', '*PAUSES*', '*LOOKS AROUND*', '*SMIRKS*'];
+
+function deriveActionTextCues(
+  beats: RetentionBeat[],
+  duration: number
+): MotionCue[] {
+  const cues: MotionCue[] = [];
+  for (const beat of beats) {
+    if (beat.role === 'payoff' || beat.role === 'teaser') {
+      const intensity = beat.confidence || 0.5;
+      if (intensity > 0.6 && beat.start < duration) {
+        const actionText = ACTION_TEXTS[Math.floor(beat.start * 7) % ACTION_TEXTS.length];
+        cues.push({
+          kind: 'lower_third',
+          t: beat.start,
+          duration: 1.5,
+          intensity,
+          label: actionText,
+          word: actionText,
+          variant: 'action_text',
+        });
+      }
+    }
+  }
+  return cues;
+}
+
 export function planMotion(
   emotionEvents: EmotionEvent[],
   retentionBeats: RetentionBeat[],
@@ -318,8 +345,9 @@ export function planMotion(
 ): MotionPlan {
   const emotionCues = deriveCuesFromEmotion(emotionEvents, media, duration);
   const retentionCues = deriveCuesFromRetention(retentionBeats, media, duration);
+  const actionTextCues = deriveActionTextCues(retentionBeats, duration);
 
-  const allCues = [...emotionCues, ...retentionCues];
+  const allCues = [...emotionCues, ...retentionCues, ...actionTextCues];
   allCues.sort((a, b) => a.t - b.t);
 
   const deduped: MotionCue[] = [];

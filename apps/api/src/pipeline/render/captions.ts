@@ -17,6 +17,7 @@ export type KineticWordEffect =
   | 'slide_right'
   | 'bounce'
   | 'highlight'
+  | 'color_swap'
   | 'none';
 
 export interface KineticWord {
@@ -74,6 +75,10 @@ export function toKineticWords(
         w.effect = i % 2 === 0 ? 'bounce' : 'slide_left';
         w.emphasis = intensity;
         w.layer = Math.floor(intensity * 3);
+      } else if (intensity > 0.5) {
+        w.effect = 'color_swap';
+        w.emphasis = intensity;
+        w.layer = 3;
       } else if (intensity > 0.4) {
         w.effect = 'highlight';
         w.emphasis = intensity;
@@ -172,6 +177,8 @@ function effectParams(effect: KineticWordEffect, emphasis: number): string {
       return 'fs=' + Math.round(40 + e * 20) + ':y=<0\\,20\\,0\\,10\\,0';
     case 'highlight':
       return 'fs=40:boxcolor=yellow@' + (e * 0.3).toFixed(2);
+    case 'color_swap':
+      return 'fs=40:boxcolor=green@' + (e * 0.2).toFixed(2);
     default:
       return 'fs=36';
   }
@@ -194,6 +201,8 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
     'Style: Emphatic,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Dynamic,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Punchy,DejaVu Sans Bold,78,&H00FF8800,&H000019FF,&H80000000,&H80000000,-1,0,0,0,105,105,0.8,0,1,3,1,2,60,60,300,1',
+    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H0000FF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
+    'Style: RedEmphasis,DejaVu Sans Bold,82,&H000000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',

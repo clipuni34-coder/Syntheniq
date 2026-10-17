@@ -46,6 +46,19 @@ function buildScaleCropFilters(media: MediaInfo): string[] {
   ];
 }
 
+function buildColorGradeFilters(): string[] {
+  return [
+    `eq=contrast=1.2:saturation=1.5:brightness=0.05:gamma=1.0:gamma_r=1.05:gamma_g=1.0:gamma_b=0.95`,
+  ];
+}
+
+function buildVintageOverlayFilters(): string[] {
+  return [
+    `noise=alls=4:allf=t+u`,
+    `vignette=angle=PI/4`,
+  ];
+}
+
 function buildCaptionFilters(options: Required<TreatmentOptions>): string[] {
   const filters: string[] = [];
   if (options.assFile) {
@@ -136,6 +149,18 @@ function buildMotionFilters(
         keyframes.push({ t, type: 'settle_zoom' });
         break;
       }
+
+      case 'lower_third': {
+        if (cue.variant === 'action_text') {
+          const text = (cue.word || cue.label).replace(/:/g, '');
+          filters.push(
+            `drawbox=x=0:y=0:w=iw:h=80:color=black@0.7:t=fill:enable='between(t,0,${dur.toFixed(1)})':z=5,` +
+            `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=20:enable='between(t,0,${dur.toFixed(1)})':z=6`
+          );
+          keyframes.push({ t, type: 'action_text' });
+        }
+        break;
+      }
     }
   }
 
@@ -207,7 +232,7 @@ export async function buildTreatment(
   const allKeyframes: Array<{ t: number; type: string }> = [];
   const allCues: MotionCue[] = [];
 
-  const baseScaleCrop = buildScaleCropFilters(decision.media);
+  const baseScaleCrop = [...buildScaleCropFilters(decision.media), ...buildColorGradeFilters(), ...buildVintageOverlayFilters()];
 
   // Apply visual effects (face highlighting, background blur, per-segment smart crop, stabilization)
   const faces = opts.faces || [];

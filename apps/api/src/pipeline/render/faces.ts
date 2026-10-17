@@ -131,21 +131,40 @@ export function buildFaceHighlightFilters(
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
-  const color = opts.faceHighlightColor || '#00FF00@0.5';
+  const color = opts.faceHighlightColor || '#00FF00@0.2';
   const filters: string[] = [];
   const keyframes: Array<{ t: number; type: string }> = [];
 
-  // Scale face coordinates from detection resolution to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+  // Scale face coordinates from detection frame (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
+  const scaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const scaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
 
-  for (const face of faces.slice(0, 3)) {
+  // Merge consecutive faces with similar coordinates to avoid excessive drawbox filters
+  const merged: FaceTrack[] = [];
+  for (const face of faces) {
+    const last = merged[merged.length - 1];
+    if (last &&
+        Math.abs(face.x - last.x) < 10 &&
+        Math.abs(face.y - last.y) < 10 &&
+        Math.abs(face.width - last.width) < 10 &&
+        Math.abs(face.height - last.height) < 10 &&
+        face.start === last.end) {
+      last.end = face.end;
+      last.confidence = Math.max(last.confidence, face.confidence);
+    } else {
+      merged.push({ ...face });
+    }
+  }
+
+  for (const face of merged) {
     const x = Math.round(face.x * scaleX);
     const y = Math.round(face.y * scaleY);
     const w = Math.max(1, Math.round(face.width * scaleX));
     const h = Math.max(1, Math.round(face.height * scaleY));
 
-    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,0,3)'`);
+    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,${face.start},${face.end})'`);
     keyframes.push({ t: face.start, type: 'face_highlight' });
   }
 
@@ -164,9 +183,11 @@ export function buildBackgroundBlurFilters(
 
   const blurRadius = opts.backgroundBlur;
   const firstFace = faces[0];
-  // Scale coordinates to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+  // Scale coordinates from detection frame (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
+  const scaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const scaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
   const x = Math.round(firstFace.x * scaleX);
   const y = Math.round(firstFace.y * scaleY);
   const w = Math.max(1, Math.round(firstFace.width * scaleX));
@@ -187,13 +208,23 @@ export function buildSmartCropFilters(
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
-  const firstFace = faces[0];
-  // Scale face coordinates from detection resolution to export resolution
-  const scaleX = EXPORT_SPEC.width / width;
-  const scaleY = EXPORT_SPEC.height / height;
+  // Only apply smart crop if the video isn't already 9:16 portrait.
+  // If the video matches the export aspect ratio, cropping just zooms in unnecessarily.
+  const exportAspect = EXPORT_SPEC.width / EXPORT_SPEC.height;
+  const mediaAspect = width / height;
+  if (Math.abs(exportAspect - mediaAspect) < 0.1) {
+    return { filters: [], keyframes: [] };
+  }
 
-  const centerX = (firstFace.x + firstFace.width / 2) * scaleX;
-  const centerY = (firstFace.y + firstFace.height / 2) * scaleY;
+  const firstFace = faces[0];
+  // Scale face coordinates from detection frame (320px width) to export resolution
+  const DETECTION_WIDTH = 320;
+  const DETECTION_HEIGHT = Math.round(DETECTION_WIDTH * height / width);
+  const exportScaleX = EXPORT_SPEC.width / DETECTION_WIDTH;
+  const exportScaleY = EXPORT_SPEC.height / DETECTION_HEIGHT;
+
+  const centerX = (firstFace.x + firstFace.width / 2) * exportScaleX;
+  const centerY = (firstFace.y + firstFace.height / 2) * exportScaleY;
 
   // Clamp to valid range
   const cropW = EXPORT_SPEC.width;
