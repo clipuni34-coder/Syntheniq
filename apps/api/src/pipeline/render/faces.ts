@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { run } from '../../lib/ffmpeg.js';
+import { probeMedia } from '../probe.js';
 import type { FaceTrack } from '../../types.js';
 import { ensureDir, sourceDir } from '../../lib/paths.js';
 import { EXPORT_SPEC } from './index.js';
@@ -49,6 +50,17 @@ export async function detectFaces(
     return { faceTrack: [], faceCount: 0, hasFace: false };
   }
 
+  // Frames are extracted with `scale=320:-1` (aspect ratio preserved) for speed.
+  // Rescale detected coordinates back to the source video's native resolution so
+  // the renderer can map them to the export spec via decision.media dimensions.
+  let rescale = 1;
+  try {
+    const probe = await probeMedia(videoPath);
+    if (probe.width && probe.width > 0) rescale = probe.width / 320;
+  } catch {
+    // fall back to 1:1 if probing the source fails
+  }
+
   const faceTrack: FaceTrack[] = [];
   let totalFaces = 0;
   let frameWithFaces = 0;
@@ -69,10 +81,10 @@ export async function detectFaces(
           faceTrack.push({
             start: i,
             end: i + 1,
-            x: face.x,
-            y: face.y,
-            width: face.width,
-            height: face.height,
+            x: Math.round(face.x * rescale),
+            y: Math.round(face.y * rescale),
+            width: Math.round(face.width * rescale),
+            height: Math.round(face.height * rescale),
             confidence: face.confidence,
           });
         }

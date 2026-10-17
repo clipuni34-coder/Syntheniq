@@ -26,6 +26,25 @@ def main() -> int:
         print("faster_whisper is not installed", file=sys.stderr)
         return 2
 
+    # Compatibility shim: faster-whisper 1.2.1 forwards metadata_errors="ignore"
+    # to av.open(), a keyword that current PyAV (>=14) no longer accepts and
+    # raises TypeError on. Wrap av.open to drop that kwarg so transcription runs
+    # across PyAV versions. It only controls metadata parsing robustness, which
+    # is irrelevant for a clean 16kHz WAV input.
+    try:
+        import av as _av
+        if not getattr(_av, "_syntheniq_patched", False):
+            _orig_av_open = _av.open
+
+            def _av_open(*args, **kwargs):
+                kwargs.pop("metadata_errors", None)
+                return _orig_av_open(*args, **kwargs)
+
+            _av.open = _av_open
+            _av._syntheniq_patched = True
+    except Exception:
+        pass
+
     model = WhisperModel(args.model, device=args.device, compute_type="int8")
     segments_iter, info = model.transcribe(
         args.input,

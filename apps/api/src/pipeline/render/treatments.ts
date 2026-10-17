@@ -394,7 +394,7 @@ export function buildRenderCommand(
     '-ss', String(start),
     '-t', String(duration),
     '-i', input,
-    '-vf', [...allVideoFilters, ...captionFilters].filter(Boolean).join(','),
+    '-vf', [...allVideoFilters, ...captionFilters, 'setsar=1,setparams=range=tv,format=yuv420p'].filter(Boolean).join(','),
   ];
 
   if (treatment.audioFilters.length > 0) {

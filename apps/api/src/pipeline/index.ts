@@ -25,6 +25,7 @@ import {
 import { buildCaptionEvents, writeASS } from './render/captions.js';
 import { extractPoster } from './render/index.js';
 import { renderWithTreatment, type BuildTreatmentInput } from './render/render.js';
+import { detectFaces } from './render/faces.js';
 import { verifyExport } from './editorial/qc.js';
 import { downloadFromUrl } from '../lib/download.js';
 import type {
@@ -281,7 +282,28 @@ export async function runAnalysis(
       structure.sceneCuts = await detectSceneCuts(input).catch(() => []);
     }
     fs.writeFileSync(p.structurePath(projectId), JSON.stringify(structure));
-    await jobs.updateJob(jobId, { progress: 32, message: MSG.LISTEN });
+
+    // Face detection: extract 1fps frames + run Haar cascade per frame.
+    // Results are persisted to structure.json and surfaced in the analysis so
+    // the renderer can apply face-aware visual effects (highlight/blur/crop).
+    try {
+      const faceResult = await detectFaces(
+        input,
+        projectId,
+        project.media!.filename,
+        (frac, msg) =>
+          jobs
+            .updateJob(jobId, { progress: 32 + Math.round(frac * 14), message: `Face detection: ${msg}` })
+            .catch(() => undefined)
+      );
+      structure.faceTrack = faceResult.faceTrack;
+      structure.stats.faceCount = faceResult.faceCount;
+      structure.stats.hasFace = faceResult.hasFace;
+      fs.writeFileSync(p.structurePath(projectId), JSON.stringify(structure));
+    } catch (err) {
+      notes.push(`Face detection failed: ${(err as Error).message}`);
+    }
+    await jobs.updateJob(jobId, { progress: 46, message: MSG.LISTEN });
 
     let transcript: TranscriptResult = { segments: [], language: null, provider: 'none', hasText: false };
     let coverage: ReturnType<typeof analyzeCoverage> | null = null;
@@ -420,6 +442,7 @@ export async function runAnalysis(
         sceneCuts: structure.sceneCuts,
         speechActive: structure.speechActive,
         energyCurve: structure.energyCurve,
+        faceTrack: structure.faceTrack || [],
         stats: structure.stats,
       },
       transcript: transcript.segments,

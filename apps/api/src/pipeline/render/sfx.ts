@@ -54,16 +54,16 @@ async function generateSfxFile(
 
   switch (sfxType) {
     case 'whoosh':
-      filter = `anoisesrc=d=${dur}:f=white:c=pink,volume=${intensity}`;
+      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity}`;
       break;
     case 'swoosh':
-      filter = `anoisesrc=d=${dur}:f=white:c=pink,volume=${intensity},afade=t=out:st=${dur - 0.3}:d=0.3`;
+      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity},afade=t=out:st=${dur - 0.3}:d=0.3`;
       break;
     case 'pop':
       filter = `sine=frequency=${freq * 2}:duration=0.05,volume=${intensity}`;
       break;
     case 'click':
-      filter = `anoisesrc=d=0.05:f=white:synth=triangle,volume=${intensity}`;
+      filter = `anoisesrc=d=0.05:c=white,volume=${intensity}`;
       break;
     case 'hum':
       filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.5},afade=t=in:st=0:d=0.2,afade=t=out:st=${dur - 0.2}:d=0.2`;
@@ -72,7 +72,7 @@ async function generateSfxFile(
       filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity}`;
       break;
     case 'impact':
-      filter = `anoisesrc=d=0.1:f=white:synth=triangle,volume=${intensity}`;
+      filter = `anoisesrc=d=0.1:c=white,volume=${intensity}`;
       break;
     default:
       filter = `sine=frequency=440:duration=${dur},volume=${intensity}`;
