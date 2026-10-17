@@ -43,6 +43,7 @@ export async function renderClip({ input, start, duration, assFile = null, outFi
   if (assFile) {
     filters.push(`subtitles=filename='${escapeFilterPath(assFile)}':fontsdir='${escapeFilterPath(fontsDir())}'`);
   }
+  filters.push('setsar=1');
   const args = [
     '-hide_banner', '-y',
     '-ss', String(start),

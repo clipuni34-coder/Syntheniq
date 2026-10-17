@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json && cp src/pipeline/transcribe/whisper_local.py dist/pipeline/transcribe/whisper_local.py",
+    "build": "tsc -p tsconfig.json && cp src/pipeline/transcribe/whisper_local.py dist/pipeline/transcribe/whisper_local.py && cp src/pipeline/face_detect.py dist/pipeline/face_detect.py && cp src/pipeline/face_detect_cascade.xml dist/pipeline/ 2>/dev/null || true && pip3 install --break-system-packages -r requirements.txt",
     "start": "node dist/server.js",
     "test": "node --import tsx --test test/*.test.ts test/integration/*.test.ts",
     "fixtures": "tsx scripts/gen-fixtures.ts",
@@ -24,7 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.23.1",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
   }
 }

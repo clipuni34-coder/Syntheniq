@@ -9,7 +9,21 @@ export async function ensureWav(
   const args = ['-hide_banner', '-y'];
   if (ss !== null && ss !== undefined) args.push('-ss', String(ss));
   if (to !== null && to !== undefined) args.push('-to', String(to));
-  args.push('-i', input, '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-map', '0:a:0', outPath);
+  args.push(
+    '-i',
+    input,
+    '-map',
+    '0:a:0',
+    '-af',
+    'dynaudnorm=g=15:f=150',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-c:a',
+    'pcm_s16le',
+    outPath,
+  );
   await run('ffmpeg', args);
   return outPath;
 }

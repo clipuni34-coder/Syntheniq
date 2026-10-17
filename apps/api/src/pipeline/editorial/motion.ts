@@ -152,13 +152,13 @@ function transitionFilters(cue: MotionCue, media: MediaInfo): string[] {
   switch (variant) {
     case 'flash': {
       const alpha = clamp(intensity * 0.6, 0.1, 0.6);
-      return [`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha}:t=fill:d=${r2(cue.duration)}`];
+      return [`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha}:t=fill:enable='between(t,0,${r2(cue.duration)})'`];
     }
     case 'wipe':
       return [`wipe=horizontal:1:${r2(cue.duration)}:0x000000`];
     case 'pulse': {
       const alpha = clamp(intensity * 0.3, 0.05, 0.3);
-      return [`drawbox=x=0:y=0:w=iw:h=ih:color=yellow@${alpha}:t=fill:d=${r2(cue.duration)}:nb=2`];
+      return [`drawbox=x=0:y=0:w=iw:h=ih:color=yellow@${alpha}:t=fill:enable='between(t,0,${r2(cue.duration)}):nb=2'`];
     }
     default:
       return [];

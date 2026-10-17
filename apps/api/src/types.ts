@@ -46,14 +46,27 @@ export interface EnergyPoint {
   rms: number;
 }
 
+export interface FaceTrack {
+  start: number;
+  end: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+}
+
 export interface StructureData {
   sceneCuts: number[];
   speechActive: Span[];
   energyCurve: EnergyPoint[];
+  faceTrack?: FaceTrack[];
   stats: {
     cutCount?: number;
     speechRatio?: number;
     meanEnergy?: number;
+    faceCount?: number;
+    hasFace?: boolean;
     [k: string]: unknown;
   };
 }

@@ -11,6 +11,7 @@ import { buildEditDecision, type EditDecision } from '../editorial/plan.js';
 import { buildCaptionEvents, buildKineticCaptions, writeASS, type KineticCaptionEvent } from './captions.js';
 import { validateCaptions, repairCaptions, checkCaptionReadability, type CaptionQCResult } from './caption-qc.js';
 import { buildTreatment, buildRenderCommand, type TreatmentOptions, type TreatmentResult } from './treatments.js';
+import { applySoundEffects, type SoundEffect, type SfxContext } from './sfx.js';
 import { EXPORT_SPEC, escapeFilterPath } from './index.js';
 import { run, ffprobe } from '../../lib/ffmpeg.js';
 import type { MediaInfo } from '../editorial/motion.js';
@@ -29,6 +30,8 @@ export interface VisualTreatmentResult {
   outFile: string;
   assFile: string | null;
   kineticAssFile: string | null;
+  soundEffects: SoundEffect[];
+  sfxAudioFiles: string[];
   bytes: number;
   verified: boolean;
   warnings: string[];
@@ -95,7 +98,7 @@ export async function buildVisualTreatment(
   options: TreatmentOptions = {}
 ): Promise<VisualTreatmentResult> {
   const { input: videoPath, clip, analysis, outDir } = input;
-  const { start: clipStart, end: clipEnd, id: clipId, title: clipTitle } = clip;
+  const { start: clipStart, end: clipEnd, id: clipIdStr, title: clipTitle } = clip;
   const clipDuration = clipEnd - clipStart;
   const warnings: string[] = [];
 
@@ -104,6 +107,7 @@ export async function buildVisualTreatment(
   }
 
   const probe = await ffprobe(videoPath);
+  const hasAudio = (probe.streams || []).some((s: any) => s.codec_type === 'audio');
   const media = deriveMediaInfo({
     width: probe.width || 1080,
     height: probe.height || 1920,
@@ -225,10 +229,16 @@ export async function buildVisualTreatment(
     fs.rmSync(kineticAssFile, { force: true });
   }
 
-  const treatment = buildTreatment(decision, {
+  const treatment = await buildTreatment(decision, {
     ...options,
     assFile,
     kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
+    faces: input.analysis.structure?.faceTrack || [],
+    visualEffects: input.analysis.structure?.stats?.hasFace ? {
+      faceHighlight: 0.3,
+      backgroundBlur: 2,
+      smartCrop: true,
+    } : {},
   });
 
   warnings.push(...treatment.warnings);
@@ -237,10 +247,22 @@ export async function buildVisualTreatment(
   const safeFilters = buildSafeRenderFilters(treatment.videoFilters, decision.motion.cues, media, clipDuration);
   for (const w of safeFilters.warnings) warnings.push(`[filter QC] ${w}`);
 
+   // Sound effects
+  const clipId = clipIdStr;
+  const sfxCtx: SfxContext = {
+    clipDir: path.join(path.dirname(videoPath), clipId),
+    clipDuration,
+  };
+  const sfxResult = await applySoundEffects(decision, treatment.motionCues, clipId, sfxCtx, (frac, msg) => {
+    warnings.push(`[SFX] ${msg} ${Math.round(frac * 100)}%`);
+  });
+  warnings.push(`[SFX] ${sfxResult.notes.join(' ')}`);
+
   const renderArgs = buildRenderCommand(videoPath, outFile, treatment, {
     start: clipStart,
     duration: clipDuration,
-  });
+  }, sfxResult.effects, sfxResult.audioFiles, hasAudio);
+
 
   const totalMotionDuration = treatment.motionCues.reduce((sum, c) => sum + c.duration, 0);
   if (totalMotionDuration > 30) {
@@ -255,6 +277,8 @@ export async function buildVisualTreatment(
     outFile,
     assFile,
     kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
+    soundEffects: sfxResult.effects,
+    sfxAudioFiles: sfxResult.audioFiles,
     bytes: 0,
     verified: false,
     warnings,

@@ -47,6 +47,7 @@ export async function clipRoutes(app: FastifyInstance): Promise<void> {
       stats: analysis.stats,
       notes: analysis.notes,
       clips: analysis.clips,
+      faceTrack: (analysis.structure && analysis.structure.faceTrack) || [],
       timeline: {
         duration: project.media && project.media.probe ? project.media.probe.duration : 0,
         waveform: downsample((analysis.structure && analysis.structure.energyCurve) || [], 220),
