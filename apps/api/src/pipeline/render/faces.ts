@@ -146,7 +146,7 @@ export function buildFaceHighlightFilters(
     const w = Math.max(1, Math.round(face.width * scaleX));
     const h = Math.max(1, Math.round(face.height * scaleY));
 
-    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,0,3)'`);
+    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,${face.start},${face.end})'`);
     keyframes.push({ t: face.start, type: 'face_highlight' });
   }
 
