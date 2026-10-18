@@ -54,7 +54,7 @@ function buildColorGradeFilters(): string[] {
 
 function buildVintageOverlayFilters(): string[] {
   return [
-    `noise=alls=4:allf=t+u`,
+    `noise=alls=2:allf=t`,
     `vignette=angle=PI/4`,
   ];
 }
