@@ -229,10 +229,11 @@ export async function buildVisualTreatment(
     fs.rmSync(kineticAssFile, { force: true });
   }
 
-  const treatment = await buildTreatment(decision, {
+   const treatment = await buildTreatment(decision, {
     ...options,
     assFile,
     kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
+    outDir: input.outDir,
     faces: input.analysis.structure?.faceTrack || [],
     visualEffects: input.analysis.structure?.stats?.hasFace ? {
       faceHighlight: 0.2,

@@ -455,25 +455,26 @@ export function buildRenderCommand(
       }
     }
     
-    // Combine all filter chains with semicolons
-    const allChains = [...videoChains, ...audioChains];
-    inputs.push('-filter_complex', allChains.join(';'));
+     // Combine all filter chains with semicolons
+     const allChains = [...videoChains, ...audioChains];
+     inputs.push('-filter_complex_threads', '1');
+     inputs.push('-filter_complex', allChains.join(';'));
     
-    inputs.push('-map', '[outv]');
-    if (hasSfx) {
-      inputs.push('-map', '[outa]');
-    } else {
-      inputs.push('-map', '0:a:0?');
-    }
-    
-    inputs.push('-threads', '1');
-    inputs.push('-filter_complex_threads', '1');
-    inputs.push('-progress', 'pipe:1', '-nostats');
+     inputs.push('-map', '[outv]');
+     if (hasSfx) {
+       inputs.push('-map', '[outa]');
+     } else {
+       inputs.push('-map', '0:a:0?');
+     }
+  
+     inputs.push('-threads', '1');
+     inputs.push('-progress', 'pipe:1', '-nostats');
     inputs.push(
       '-c:v', EXPORT_SPEC.videoCodec,
       '-profile:v', 'high',
       '-preset', 'superfast',
       '-crf', '22',
+      '-x264-params', 'threads=1',
       '-r', String(EXPORT_SPEC.fps),
       '-pix_fmt', EXPORT_SPEC.pixFmt,
       '-c:a', EXPORT_SPEC.audioCodec,
