@@ -1,5 +1,7 @@
 // Syntheniq — visual treatment layer: assembles FFmpeg filter chains
 // from EditDecision + MotionPlan + kinetic captions.
+import fs from 'node:fs';
+import path from 'node:path';
 import { EXPORT_SPEC } from './index.js';
 import type { EditDecision, EditSegment } from '../editorial/plan.js';
 import type { MotionCue, MotionPlan, MediaInfo } from '../editorial/motion.js';
@@ -21,6 +23,7 @@ export interface TreatmentResult {
 export interface TreatmentOptions {
   assFile?: string | null;
   kineticAssFile?: string | null;
+  outDir?: string;
   maxMotionIntensity?: number;
   avoidTransitionsAtEdges?: boolean;
   faces?: FaceTrack[];
@@ -30,6 +33,7 @@ export interface TreatmentOptions {
 const DEFAULT_OPTIONS: Required<TreatmentOptions> = {
   assFile: null,
   kineticAssFile: null,
+  outDir: '',
   maxMotionIntensity: 0.85,
   avoidTransitionsAtEdges: true,
   faces: [],
@@ -69,6 +73,41 @@ function buildCaptionFilters(options: Required<TreatmentOptions>): string[] {
 function buildKineticCaptionFilter(options: Required<TreatmentOptions>): string | null {
   if (!options.kineticAssFile) return null;
   return `ass=filename='${options.kineticAssFile}'`;
+}
+
+function mergeASSFiles(baseFile: string | null, kineticFile: string | null, outDir: string): string | null {
+  if (!baseFile || !kineticFile) return null;
+  if (!fs.existsSync(baseFile) || !fs.existsSync(kineticFile)) return null;
+
+  const mergePath = path.join(outDir, 'merged-captions.ass');
+  const baseContent = fs.readFileSync(baseFile, 'utf8');
+  const kineticContent = fs.readFileSync(kineticFile, 'utf8');
+
+  const baseEvents = extractASSEvents(baseContent);
+  const kineticEvents = extractASSEvents(kineticContent);
+
+  const kineticLines = kineticContent.split('\n');
+  const eventsIdx = kineticLines.findIndex((l) => l.trim().toLowerCase().startsWith('[events]'));
+  if (eventsIdx < 0) return null;
+  const header = kineticLines.slice(0, eventsIdx).join('\n');
+
+  const merged = `${header}\n[Events]\n${baseEvents.length > 0 ? kineticLines[eventsIdx + 1] + '\n' : ''}${baseEvents.join('\n')}${kineticEvents.length > 0 ? '\n' + kineticEvents.join('\n') : ''}\n`;
+  fs.writeFileSync(mergePath, merged, 'utf8');
+  return mergePath;
+}
+
+function extractASSEvents(content: string): string[] {
+  const lines = content.split('\n');
+  const eventsIdx = lines.findIndex((l) => l.trim().toLowerCase().startsWith('[events]'));
+  if (eventsIdx < 0) return [];
+  const formatIdx = eventsIdx + 1;
+  const events: string[] = [];
+  for (let i = formatIdx; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().toLowerCase().startsWith('[')) break;
+    if (line.trim().length > 0) events.push(line);
+  }
+  return events;
 }
 
 function buildMotionFilters(
@@ -323,12 +362,19 @@ export async function buildTreatment(
 
   const captionFilter = buildKineticCaptionFilter(opts);
 
-  const baseCaptionFilters = buildCaptionFilters(opts);
+  let mergedAssFile: string | null = null;
+  if (opts.assFile && opts.kineticAssFile && captionFilter) {
+    mergedAssFile = mergeASSFiles(opts.assFile, opts.kineticAssFile, opts.outDir || '');
+  }
+
+  const baseCaptionFilters = mergedAssFile
+    ? [`ass=filename='${mergedAssFile}'`]
+    : buildCaptionFilters(opts);
 
   return {
     videoFilters,
     audioFilters,
-    captionFilter,
+    captionFilter: mergedAssFile ? null : captionFilter,
     captionFilters: baseCaptionFilters,
     motionCues: allCues,
     keyframes: allKeyframes,
