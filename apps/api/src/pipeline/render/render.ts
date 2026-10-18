@@ -22,6 +22,34 @@ function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
+async function normalizeInput(
+  input: string,
+  start: number,
+  duration: number,
+  outFile: string,
+  hasAudio: boolean
+): Promise<void> {
+  const scaleFilter = `scale=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:force_original_aspect_ratio=decrease,pad=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
+  const videoFilters = `fps=${EXPORT_SPEC.fps},${scaleFilter},format=${EXPORT_SPEC.pixFmt}`;
+  const args = [
+    '-hide_banner', '-y',
+    '-ss', String(start),
+    '-t', String(duration),
+    '-i', input,
+    '-vf', videoFilters,
+    '-c:v', 'libx264',
+    '-preset', 'superfast',
+    '-crf', '18',
+  ];
+  if (hasAudio) {
+    args.push('-c:a', 'copy');
+  } else {
+    args.push('-an');
+  }
+  args.push(outFile);
+  await run('ffmpeg', args);
+}
+
 export interface VisualTreatmentResult {
   decision: EditDecision;
   treatment: TreatmentResult;
@@ -294,7 +322,26 @@ export async function renderWithTreatment(
   const result = await buildVisualTreatment(input, options);
 
   const total = Math.max(0.1, result.decision.duration);
-  await run('ffmpeg', result.renderArgs, {
+  let renderArgs = result.renderArgs;
+  let normalizedInput: string | null = null;
+
+  if (renderArgs.includes('-filter_complex')) {
+    normalizedInput = path.join(path.dirname(result.outFile), 'normalized-input.mp4');
+    await normalizeInput(
+      input.input,
+      input.clip.start,
+      input.clip.end - input.clip.start,
+      normalizedInput,
+      result.sfxAudioFiles.length > 0
+    );
+    renderArgs = renderArgs.map((a, i, arr) => {
+      if (a === input.input) return normalizedInput!;
+      if (a === '-ss') { arr[i + 1] = '0'; return a; }
+      return a;
+    });
+  }
+
+  await run('ffmpeg', renderArgs, {
     onStdoutLine: (line: string) => {
       if (!onProgress) return;
       let m = line.match(/^out_time_ms=(\d+)/);
@@ -309,6 +356,8 @@ export async function renderWithTreatment(
       }
     },
   });
+
+  if (normalizedInput) fs.rmSync(normalizedInput, { force: true });
 
   const stat = fs.statSync(result.outFile);
   if (!stat.size) {

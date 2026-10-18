@@ -155,7 +155,7 @@ function buildMotionFilters(
       }
 
       case 'punch_in': {
-        const zoom = Math.min(1.6, 1.5 + (cue.intensity || 0.7) * 1.5);
+        const zoom = 1.5 + (cue.intensity || 0.7) * 1.5;
         const scaledW = Math.round(EXPORT_SPEC.width * zoom);
         const scaledH = Math.round(EXPORT_SPEC.height * zoom);
         filters.push(
@@ -503,9 +503,8 @@ export function buildRenderCommand(
     '-map', '0:a:0?',
     '-c:v', EXPORT_SPEC.videoCodec,
     '-profile:v', 'high',
-    '-preset', 'superfast',
-    '-crf', '22',
-    '-filter_complex_threads', '1',
+    '-preset', 'veryfast',
+    '-crf', '20',
     '-progress', 'pipe:1',
     '-nostats',
     '-r', String(EXPORT_SPEC.fps),
