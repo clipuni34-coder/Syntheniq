@@ -432,6 +432,7 @@ export function buildRenderCommand(
       '-b:a', '128k',
       '-ar', '48000',
       '-ac', '2',
+      '-t', String(duration),
       '-movflags', '+faststart',
       outFile,
     );
@@ -451,22 +452,23 @@ export function buildRenderCommand(
     args.push('-af', treatment.audioFilters.join(','));
   }
 
-  args.push(
-    '-map', '0:v:0',
-    '-map', '0:a:0?',
-    '-c:v', EXPORT_SPEC.videoCodec,
-    '-profile:v', 'high',
-    '-preset', 'veryfast',
-    '-crf', '20',
-    '-r', String(EXPORT_SPEC.fps),
-    '-pix_fmt', EXPORT_SPEC.pixFmt,
-    '-c:a', EXPORT_SPEC.audioCodec,
-    '-b:a', '128k',
-    '-ar', '48000',
-    '-ac', '2',
-    '-movflags', '+faststart',
-    outFile,
-  );
+    args.push(
+      '-map', '0:v:0',
+      '-map', '0:a:0?',
+      '-c:v', EXPORT_SPEC.videoCodec,
+      '-profile:v', 'high',
+      '-preset', 'veryfast',
+      '-crf', '20',
+      '-r', String(EXPORT_SPEC.fps),
+      '-pix_fmt', EXPORT_SPEC.pixFmt,
+      '-c:a', EXPORT_SPEC.audioCodec,
+      '-b:a', '128k',
+      '-ar', '48000',
+      '-ac', '2',
+      '-t', String(duration),
+      '-movflags', '+faststart',
+      outFile,
+    );
 
   return args;
 }
