@@ -83,29 +83,29 @@ function mergeASSFiles(baseFile: string | null, kineticFile: string | null, outD
   const baseContent = fs.readFileSync(baseFile, 'utf8');
   const kineticContent = fs.readFileSync(kineticFile, 'utf8');
 
-  const baseEvents = extractASSEvents(baseContent);
-  const kineticEvents = extractASSEvents(kineticContent);
+  const baseEvents = extractASSDialogue(baseContent);
+  const kineticEvents = extractASSDialogue(kineticContent);
 
   const kineticLines = kineticContent.split('\n');
   const eventsIdx = kineticLines.findIndex((l) => l.trim().toLowerCase().startsWith('[events]'));
   if (eventsIdx < 0) return null;
+  const formatLine = kineticLines[eventsIdx + 1];
   const header = kineticLines.slice(0, eventsIdx).join('\n');
 
-  const merged = `${header}\n[Events]\n${baseEvents.length > 0 ? kineticLines[eventsIdx + 1] + '\n' : ''}${baseEvents.join('\n')}${kineticEvents.length > 0 ? '\n' + kineticEvents.join('\n') : ''}\n`;
+  const merged = `${header}\n[Events]\n${formatLine}\n${baseEvents.join('\n')}${kineticEvents.length > 0 ? '\n' + kineticEvents.join('\n') : ''}\n`;
   fs.writeFileSync(mergePath, merged, 'utf8');
   return mergePath;
 }
 
-function extractASSEvents(content: string): string[] {
+function extractASSDialogue(content: string): string[] {
   const lines = content.split('\n');
   const eventsIdx = lines.findIndex((l) => l.trim().toLowerCase().startsWith('[events]'));
   if (eventsIdx < 0) return [];
-  const formatIdx = eventsIdx + 1;
   const events: string[] = [];
-  for (let i = formatIdx; i < lines.length; i++) {
+  for (let i = eventsIdx + 1; i < lines.length; i++) {
     const line = lines[i];
     if (line.trim().toLowerCase().startsWith('[')) break;
-    if (line.trim().length > 0) events.push(line);
+    if (line.trim().length > 0 && !line.trim().toLowerCase().startsWith('format')) events.push(line);
   }
   return events;
 }
