@@ -3,6 +3,7 @@
 // beats + motion cues into a concrete EditDecision with segments,
 // keyframe-style cuts, and transition metadata.
 import type { Segment, Word, EnergyPoint, Span } from '../../types.js';
+import type { DopamineMoment } from './themes.js';
 import type { EmotionEvent, EmotionTrajectory, EmotionIntelligence } from './emotion.js';
 import type { RetentionPlan, RetentionBeat } from './retention.js';
 import type { MotionPlan, MotionCue, MediaInfo } from './motion.js';
@@ -93,12 +94,14 @@ function planSegments(
   words: Word[],
   emotionEvents: EmotionEvent[],
   retentionBeats: RetentionBeat[],
-  media: MediaInfo
+  media: MediaInfo,
+  dopamineMoments: DopamineMoment[] = []
 ): EditSegment[] {
   const editSegments: EditSegment[] = [];
 
   const relevantEvents = emotionEvents.filter((e) => e.t >= editStart && e.t <= editEnd);
   const relevantBeats = retentionBeats.filter((b) => b.end > editStart && b.start < editEnd);
+  const relevantDopamine = dopamineMoments.filter((m) => m.time >= editStart && m.time <= editEnd);
 
   const keyphrases = findKeyphrases(segments, relevantEvents, relevantBeats);
 
@@ -113,6 +116,12 @@ function planSegments(
   for (const beat of relevantBeats) {
     if (['teaser', 'payoff', 'curiosity'].includes(beat.role)) {
       cutPoints.push(r2(beat.start), r2(beat.end));
+    }
+  }
+
+  for (const moment of relevantDopamine) {
+    if (moment.type === 'transition' || moment.type === 'silence_break') {
+      cutPoints.push(moment.time);
     }
   }
 
@@ -142,6 +151,7 @@ function planSegments(
 
     const eventAt = relevantEvents.find((e) => Math.abs(e.t - midpoint) < dur / 2);
     const beatAt = relevantBeats.find((b) => b.start <= midpoint && b.end >= midpoint);
+    const dopamineAt = relevantDopamine.find((m) => Math.abs(m.time - midpoint) < dur / 2);
 
     if (eventAt) {
       if (eventAt.type === 'crisis') {
@@ -152,6 +162,24 @@ function planSegments(
         purpose = 'payoff';
         title = 'revelation';
         notes.push(`Key revelation at ${r2(eventAt.t)}s`);
+      }
+    } else if (dopamineAt) {
+      if (dopamineAt.type === 'reveal') {
+        purpose = 'payoff';
+        title = 'reveal';
+        notes.push(`Dopamine reveal at ${r2(dopamineAt.time)}s — ${dopamineAt.rationale}`);
+      } else if (dopamineAt.type === 'impact') {
+        purpose = 'payoff';
+        title = 'impact-moment';
+        notes.push(`Dopamine impact at ${r2(dopamineAt.time)}s (intensity: ${dopamineAt.intensity.toFixed(2)})`);
+      } else if (dopamineAt.type === 'hook') {
+        purpose = 'hook';
+        title = 'hook-moment';
+        notes.push(`Dopamine hook at ${r2(dopamineAt.time)}s — ${dopamineAt.rationale}`);
+      } else if (dopamineAt.type === 'silence_break') {
+        purpose = 'hook';
+        title = 'attention-grab';
+        notes.push(`Dopamine silence-break at ${r2(dopamineAt.time)}s — ${dopamineAt.rationale}`);
       }
     } else if (beatAt) {
       purpose = beatAt.role === 'teaser' ? 'hook' : beatAt.role === 'payoff' ? 'payoff' : beatAt.role === 'curiosity' ? 'curiosity' : 'narrative';
@@ -228,7 +256,8 @@ function applyCues(
   editEnd: number
 ): EditSegment[] {
   for (const cue of motionPlan.cues) {
-    const segIdx = segments.findIndex((s) => cue.t >= s.start + editStart && cue.t <= s.end + editStart);
+    // Segments already have absolute timestamps relative to clipStart
+    const segIdx = segments.findIndex((s) => cue.t >= s.start && cue.t <= s.end);
     if (segIdx >= 0) {
       const seg = segments[segIdx];
       if (seg.cues.length < 3) {
@@ -248,6 +277,7 @@ export function buildEditDecision(
     energyCurve: EnergyPoint[];
     silences: Span[];
     media: MediaInfo;
+    dopamineMoments?: DopamineMoment[];
   },
   analysis: {
     emotion: EmotionIntelligence;
@@ -255,14 +285,15 @@ export function buildEditDecision(
     motion: MotionPlan;
   }
 ): EditDecision {
-  const { startTime, endTime, segments, words, energyCurve, silences, media } = input;
+  const { startTime, endTime, segments, words, energyCurve, silences, media, dopamineMoments = [] } = input;
   const { emotion, retention, motion } = analysis;
 
   const segs = segments.filter((s) => s.end > startTime && s.start < endTime);
   const relevantEvents = emotion.events.filter((e) => e.t >= startTime && e.t <= endTime);
   const relevantBeats = retention.beats.filter((b) => b.end > startTime && b.start < endTime);
+  const relevantDopamine = dopamineMoments.filter((m) => m.time >= startTime && m.time <= endTime);
 
-  let editSegments = planSegments(startTime, endTime, segs, words, relevantEvents, relevantBeats, media);
+  let editSegments = planSegments(startTime, endTime, segs, words, relevantEvents, relevantBeats, media, relevantDopamine);
   editSegments = applyTransitions(editSegments);
   editSegments = applyCues(editSegments, motion, startTime, endTime);
 
