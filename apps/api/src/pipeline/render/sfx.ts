@@ -1,10 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { run } from '../../lib/ffmpeg.js';
 import type { EditDecision } from '../editorial/plan.js';
 import type { MotionCue } from '../editorial/motion.js';
 import { ensureDir } from '../../lib/paths.js';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 export type SfxType = 'whoosh' | 'swoosh' | 'pop' | 'click' | 'hum' | 'tone' | 'impact' | 'footsteps' | 'cheer' | 'swish';
 
@@ -13,6 +13,7 @@ export interface SoundEffect {
   type: SfxType;
   start: number;
   duration: number;
+  intensity: number;
 }
 
 export interface SfxContext {
@@ -26,7 +27,8 @@ export interface SfxResult {
   notes: string[];
 }
 
-const SFX_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), 'sfx_cache');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SFX_DIR = path.resolve(__dirname, '../../../sfx_assets');
 
 const SFX_DURATIONS: Record<SfxType, number> = {
   whoosh: 2.0,
@@ -41,7 +43,49 @@ const SFX_DURATIONS: Record<SfxType, number> = {
   swish: 0.8,
 };
 
-async function generateSfxFile(
+const SFX_ASSETS: Record<SfxType, string[]> = {
+  whoosh: ['whoosh_1.wav', 'whoosh_2.wav'],
+  swoosh: ['swoosh.wav'],
+  swish: ['swish.wav'],
+  pop: ['pop.wav', 'pop_hard.wav'],
+  click: ['click.wav'],
+  hum: ['hum.wav'],
+  tone: ['tone.wav'],
+  impact: ['impact.wav', 'impact_soft.wav'],
+  footsteps: ['footsteps.wav', 'footsteps_alt.wav'],
+  cheer: ['cheer.wav', 'cheer_short.wav'],
+};
+
+function selectAsset(sfxType: SfxType, intensity: number): string {
+  const assets = SFX_ASSETS[sfxType];
+  if (!assets || assets.length === 0) {
+    const fallback = SFX_ASSETS.click[0];
+    return fallback;
+  }
+  if (assets.length === 1) return assets[0];
+  const idx = Math.max(0, Math.min(assets.length - 1, Math.floor(intensity * assets.length)));
+  return assets[idx];
+}
+
+export function resolveSfxAsset(sfxType: SfxType, intensity: number): string {
+  return path.join(SFX_DIR, selectAsset(sfxType, intensity));
+}
+
+export function getAvailableSfx(): Record<SfxType, string[]> {
+  const result: Record<SfxType, string[]> = {} as Record<SfxType, string[]>;
+  for (const type of Object.keys(SFX_ASSETS) as SfxType[]) {
+    result[type] = [];
+    for (const asset of SFX_ASSETS[type]) {
+      const fullPath = path.join(SFX_DIR, asset);
+      if (fs.existsSync(fullPath)) {
+        result[type].push(asset);
+      }
+    }
+  }
+  return result;
+}
+
+export async function loadSfxFile(
   sfxType: SfxType,
   intensity: number,
   outDir: string,
@@ -50,54 +94,14 @@ async function generateSfxFile(
   ensureDir(outDir);
   const outFile = path.join(outDir, `${sfxType}-${id}.wav`);
 
-  const dur = SFX_DURATIONS[sfxType];
-  const freq = 200 + Math.round(intensity * 800);
+  const assetFile = selectAsset(sfxType, intensity);
+  const srcPath = path.join(SFX_DIR, assetFile);
 
-  let filter: string;
-
-  switch (sfxType) {
-    case 'whoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity}`;
-      break;
-    case 'swoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity},afade=t=out:st=${dur - 0.3}:d=0.3`;
-      break;
-    case 'pop':
-      filter = `sine=frequency=${freq * 2}:duration=0.05,volume=${intensity}`;
-      break;
-    case 'click':
-      filter = `anoisesrc=d=0.05:c=white,volume=${intensity}`;
-      break;
-    case 'hum':
-      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.5},afade=t=in:st=0:d=0.2,afade=t=out:st=${dur - 0.2}:d=0.2`;
-      break;
-    case 'tone':
-      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity}`;
-      break;
-    case 'impact':
-      filter = `anoisesrc=d=0.1:c=white,volume=${intensity}`;
-      break;
-    case 'footsteps':
-      filter = `anoisesrc=d=${dur}:c=brown:volume=${intensity * 0.4},asetrate=48000*1.15`;
-      break;
-    case 'cheer':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.5},vibrato=f=5:d=0.5,afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3`;
-      break;
-    case 'swish':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.4},asetrate=48000*1.3,afade=t=out:st=${dur - 0.2}:d=0.2`;
-      break;
-    default:
-      filter = `sine=frequency=440:duration=${dur},volume=${intensity}`;
+  if (!fs.existsSync(srcPath)) {
+    throw new Error(`SFX asset not found: ${srcPath}`);
   }
 
-  await run('ffmpeg', [
-    '-hide_banner', '-y',
-    '-f', 'lavfi',
-    '-i', filter,
-    '-ar', '48000',
-    '-ac', '1',
-    outFile,
-  ]);
+  fs.copyFileSync(srcPath, outFile);
 
   return outFile;
 }
@@ -112,7 +116,7 @@ export async function applySoundEffects(
   const effects: SoundEffect[] = [];
   const audioFiles: string[] = [];
   const notes: string[] = [];
-  const cacheDir = ensureDir(path.join(SFX_DIR, clipId));
+  const cacheDir = ensureDir(path.join(ctx.clipDir, 'sfx'));
 
   onProgress(0.2, 'Planning sound effects');
 
@@ -139,26 +143,26 @@ export async function applySoundEffects(
 
     if (start > ctx.clipDuration) continue;
 
-    const sfx: SoundEffect = { id, type: sfxType, start, duration: dur };
+    const sfx: SoundEffect = { id, type: sfxType, start, duration: dur, intensity };
     effects.push(sfx);
 
     try {
-      const audioFile = await generateSfxFile(sfxType, intensity, cacheDir, id);
+      const audioFile = await loadSfxFile(sfxType, intensity, cacheDir, id);
       audioFiles.push(audioFile);
-      notes.push(`Placed ${sfxType} at ${start.toFixed(2)}s`);
+      notes.push(`Placed ${sfxType} at ${start.toFixed(2)}s (intensity ${intensity.toFixed(2)})`);
       placedCount++;
     } catch (e) {
-      notes.push(`Failed to generate ${sfxType}: ${(e as Error).message}`);
+      notes.push(`Failed to load ${sfxType}: ${(e as Error).message}`);
     }
   }
 
   if (effects.length === 0 && motionCues.length > 0) {
     const id = randomUUID();
     const sfxType: SfxType = 'whoosh';
-    const sfx: SoundEffect = { id, type: sfxType, start: 0, duration: SFX_DURATIONS[sfxType] };
+    const sfx: SoundEffect = { id, type: sfxType, start: 0, duration: SFX_DURATIONS[sfxType], intensity: 0.5 };
     effects.push(sfx);
     try {
-      const audioFile = await generateSfxFile(sfxType, 0.5, cacheDir, id);
+      const audioFile = await loadSfxFile(sfxType, 0.5, cacheDir, id);
       audioFiles.push(audioFile);
       placedCount++;
     } catch (e) {
@@ -166,12 +170,12 @@ export async function applySoundEffects(
     }
   }
 
-  onProgress(1, `Generated ${placedCount} sound effects`);
+  onProgress(1, `Loaded ${placedCount} sound effects`);
 
   return { effects, audioFiles, notes };
 }
 
-export function buildSfxMixFilters(effects: SoundEffect[], audioFiles: string[], hasAudio: boolean): {
+export function buildSfxMixFilters(effects: SoundEffect[], audioFiles: string[]): {
   filters: string[];
   inputs: string[];
 } {
@@ -184,7 +188,8 @@ export function buildSfxMixFilters(effects: SoundEffect[], audioFiles: string[],
 
     inputs.push(file);
     const delayMs = Math.round(eff.start * 1000);
-    delays.push(`[i${i}]adelay=${delayMs}|${delayMs}[d${i}]`);
+    const vol = clamp(eff.intensity || 0.7, 0.3, 1.2);
+    delays.push(`[i${i}]adelay=${delayMs},${delayMs},volume=${vol.toFixed(2)}[d${i}]`);
   });
 
   const filters = [...delays];
@@ -194,4 +199,8 @@ export function buildSfxMixFilters(effects: SoundEffect[], audioFiles: string[],
   }
 
   return { filters, inputs };
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
 }

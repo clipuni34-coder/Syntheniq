@@ -63,7 +63,6 @@ export async function renderClip({ input, start, duration, assFile = null, outFi
     '-ar', '48000',
     '-ac', '2',
     '-movflags', '+faststart',
-    '-shortest',
     '-progress', 'pipe:1',
     '-nostats',
     outFile,

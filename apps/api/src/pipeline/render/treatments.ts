@@ -286,7 +286,7 @@ export async function buildTreatment(
           allKeyframes.push(...sc.keyframes);
         }
         if (opts.visualEffects?.faceHighlight) {
-          const hl = buildFaceHighlightFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height);
+          const hl = buildFaceHighlightFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height, seg.start);
           segFilters.push(...hl.filters);
           allKeyframes.push(...hl.keyframes);
         }
@@ -395,7 +395,7 @@ export function buildRenderCommand(
       for (let i = 0; i < sfxAudioFiles.length; i++) {
         const effect = sfxEffects[i];
         const delayMs = Math.round(effect.start * 1000);
-        audioChains.push(`[${i + 1}:a]adelay=delays=${delayMs}|${delayMs}[a${i}]`);
+        audioChains.push(`[${i + 1}:a]adelay=${delayMs},${delayMs}[a${i}]`);
         sfxLabels.push(`[a${i}]`);
       }
 
@@ -433,7 +433,6 @@ export function buildRenderCommand(
       '-ar', '48000',
       '-ac', '2',
       '-movflags', '+faststart',
-      '-shortest',
       outFile,
     );
     
@@ -466,7 +465,6 @@ export function buildRenderCommand(
     '-ar', '48000',
     '-ac', '2',
     '-movflags', '+faststart',
-    '-shortest',
     outFile,
   );
 

@@ -15,6 +15,7 @@ import { transcribeWav, transcribeLong, transcribeRange } from './transcribe/ind
 import { analyzeCoverage, mergeSegments } from './transcribe/coverage.js';
 import { analyzeStructure, detectSceneCuts } from './structure.js';
 import { rankClips } from './editorial/index.js';
+import { detectContentTheme, themeEditingProfile, detectDopamineMoments, type ContentTheme, type ThemeSignal } from './editorial/themes.js';
 import {
   applyLlmEvaluations,
   buildTranscriptContext,
@@ -369,6 +370,23 @@ export async function runAnalysis(
     });
     if (!clips.length) throw new Error('No clip-worthy moments found in this video');
 
+    const themeSignal: ThemeSignal = detectContentTheme(transcript.segments, structure, probe.duration);
+    const editingProfile = themeEditingProfile(themeSignal.theme);
+    structure.stats = {
+      ...structure.stats,
+      theme: themeSignal.theme,
+      themeConfidence: themeSignal.confidence,
+      themeKeywords: themeSignal.keywords,
+      editingStrategy: themeSignal.editingStrategy,
+      targetSegmentCount: editingProfile.targetSegmentCount,
+      sfxDensity: editingProfile.sfxDensity,
+      textDensity: editingProfile.textDensity,
+      emphasisPoints: editingProfile.emphasisPoints,
+      energyTarget: editingProfile.energyTarget,
+    };
+    fs.writeFileSync(p.structurePath(projectId), JSON.stringify(structure));
+    notes.push(`Content theme: ${themeSignal.theme} (${themeSignal.confidence.toFixed(2)}) — ${editingProfile.targetSegmentCount} target segments`);
+
     // LLM editorial pass: re-score the top candidates with full context.
     // Any failure (or no API key) keeps the deterministic heuristic ranking.
     const provider: LlmProvider | null = llm === undefined ? selectLlmProvider() : llm;
@@ -399,9 +417,16 @@ export async function runAnalysis(
       } catch (err) {
         notes.push(`Editorial pass unavailable (${(err as Error).message}) — kept deterministic scores.`);
       }
-    }
+      }
 
-    await jobs.updateJob(jobId, { progress: 82, message: MSG.BUILD });
+     // Recompute viral + improvement predictions after potential LLM score adjustments
+     const { predictImprovedScore, predictViralScore } = await import('./editorial/index.js');
+     for (const clip of clips) {
+       clip.viralScore = predictViralScore(clip.scores, clip.start, clip.end, structure);
+       clip.improvedScore = predictImprovedScore(clip.total, clip.predictedSfxCount || 1, clip.predictedTransitions || 0);
+     }
+
+     await jobs.updateJob(jobId, { progress: 82, message: MSG.BUILD });
     const allWords = (transcript.segments || []).flatMap((s: Segment) => s.words || []);
     for (const clip of clips) {
       const dir = p.ensureDir(p.clipDir(projectId, clip.id));
@@ -414,6 +439,18 @@ export async function runAnalysis(
       } else {
         clip.captions = { file: null, events: 0 };
       }
+
+      // Detect dopamine moments for this clip — viral engagement spikes
+      const clipDopamine = detectDopamineMoments(
+        transcript.segments,
+        structure,
+        clip.end - clip.start,
+        clip.start
+      );
+      clip.notes = (clip.notes || []).concat(
+        clipDopamine.map((m) => `Dopamine: ${m.type}@${m.time.toFixed(1)}s (${m.rationale})`)
+      );
+
       try {
         const posterFile = p.posterPath(projectId, clip.id);
         await extractPoster(input, (clip.start + clip.end) / 2, posterFile);
@@ -486,6 +523,14 @@ export async function runAnalysis(
   }
 }
 
+function extractDopamineMoments(analysis: AnalysisData, clip: Pick<AnalysisData['clips'][number], 'start' | 'end'>, themeStats: Record<string, unknown>): Array<{ time: number; type: string; intensity: number; rationale: string }> {
+  if (!analysis.structure) return [];
+  const segments = analysis.transcript || [];
+  const duration = clip.end - clip.start;
+  const moments = detectDopamineMoments(segments, analysis.structure, duration, clip.start);
+  return moments.map((m) => ({ time: m.time, type: m.type, intensity: m.intensity, rationale: m.rationale }));
+}
+
 async function mirrorBestEffort(localPath: string, key: string, notes: string[]): Promise<void> {
   if (!isR2()) return;
   try {
@@ -509,6 +554,9 @@ export async function runExport(projectId: string, clipId: string, jobId: string
     const assFile = clip.captions && clip.captions.file ? path.join(dir, clip.captions.file) : null;
     const outFile = p.exportPath(projectId, clipId);
 
+    const theme = analysis.structure?.stats?.theme as ContentTheme || 'general';
+    const themeStats = analysis.structure?.stats || {};
+    
     const treatmentInput: BuildTreatmentInput = {
       input,
       clip: {
@@ -520,6 +568,8 @@ export async function runExport(projectId: string, clipId: string, jobId: string
       },
       analysis,
       outDir: dir,
+      theme: theme as ContentTheme,
+      dopamineMoments: extractDopamineMoments(analysis, clip, themeStats),
     };
 
     const treatmentResult = await renderWithTreatment(treatmentInput, { assFile }, (frac: number) => {

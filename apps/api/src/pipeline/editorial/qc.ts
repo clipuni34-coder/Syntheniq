@@ -245,7 +245,6 @@ export async function repairExport(
       '-ar', '48000',
       '-ac', '2',
       '-movflags', '+faststart',
-      '-shortest',
       outFile,
     ]);
 
