@@ -421,6 +421,7 @@ export function buildRenderCommand(
     }
     
     inputs.push('-threads', '1');
+    inputs.push('-filter_threads', '1');
     inputs.push(
       '-c:v', EXPORT_SPEC.videoCodec,
       '-profile:v', 'high',
@@ -447,6 +448,7 @@ export function buildRenderCommand(
     '-i', input,
     '-vf', [...allVideoFilters, ...captionFilters, 'setsar=1,setparams=range=tv,format=yuv420p'].filter(Boolean).join(','),
     '-threads', '1',
+    '-filter_threads', '1',
   ];
 
   if (treatment.audioFilters.length > 0) {
