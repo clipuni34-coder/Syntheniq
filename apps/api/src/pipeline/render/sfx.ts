@@ -189,7 +189,7 @@ export function buildSfxMixFilters(effects: SoundEffect[], audioFiles: string[])
     inputs.push(file);
     const delayMs = Math.round(eff.start * 1000);
     const vol = clamp(eff.intensity || 0.7, 0.3, 1.2);
-    delays.push(`[i${i}]adelay=${delayMs},${delayMs},volume=${vol.toFixed(2)}[d${i}]`);
+    delays.push(`[i${i}]adelay=${delayMs}|${delayMs},volume=${vol.toFixed(2)}[d${i}]`);
   });
 
   const filters = [...delays];

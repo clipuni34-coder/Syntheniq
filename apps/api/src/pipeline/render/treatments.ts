@@ -395,7 +395,7 @@ export function buildRenderCommand(
       for (let i = 0; i < sfxAudioFiles.length; i++) {
         const effect = sfxEffects[i];
         const delayMs = Math.round(effect.start * 1000);
-        audioChains.push(`[${i + 1}:a]adelay=${delayMs},${delayMs}[a${i}]`);
+        audioChains.push(`[${i + 1}:a]adelay=${delayMs}|${delayMs}[a${i}]`);
         sfxLabels.push(`[a${i}]`);
       }
 
