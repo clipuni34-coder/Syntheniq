@@ -299,7 +299,7 @@ test('Phase 9: validateMotionCues flags high intensity', () => {
 test('Phase 10: toKineticWords produces word-level effects', () => {
   const kinetic = toKineticWords(TEST_WORDS, 0, 12);
   assert.ok(kinetic.length > 0);
-  assert.ok(kinetic.every((w) => Object.values(['typewriter', 'pop', 'slide_left', 'slide_right', 'bounce', 'highlight', 'none']).includes(w.effect)));
+  assert.ok(kinetic.every((w) => Object.values(['typewriter', 'pop', 'slide_left', 'slide_right', 'bounce', 'highlight', 'scale_up', 'slide_in', 'pulse', 'none']).includes(w.effect)));
 });
 
 test('Phase 10: buildKineticCaptions groups words into events', () => {
@@ -371,7 +371,7 @@ test('Phase 10: buildTreatment assembles filter chains', async () => {
     { emotion, retention, motion }
   );
 
-  const treatment = buildTreatment(decision, {});
+  const treatment = await buildTreatment(decision, {});
   assert.ok(treatment.videoFilters.length > 0);
   assert.ok(treatment.motionCues);
   assert.ok(treatment.keyframes);
@@ -395,7 +395,7 @@ test('Phase 10: buildRenderCommand generates ffmpeg args', async () => {
     { emotion, retention, motion }
   );
 
-  const treatment = buildTreatment(decision, {});
+  const treatment = await buildTreatment(decision, {});
   const args = buildRenderCommand('/fake/input.mp4', '/fake/output.mp4', treatment, { start: 0, duration: 12 });
   assert.ok(args.includes('-c:v'));
   assert.ok(args.includes('h264'));
@@ -419,7 +419,7 @@ test('Phase 10: multi-segment treatment produces valid labeled filtergraph', asy
     { emotion, retention, motion }
   );
 
-  const treatment = buildTreatment(decision, { assFile: '/tmp/test.ass', kineticAssFile: '/tmp/kinetic.ass' });
+  const treatment = await buildTreatment(decision, { assFile: '/tmp/test.ass', kineticAssFile: '/tmp/kinetic.ass' });
   const vf = treatment.videoFilters.join(',');
 
   // Each segment must have a trim + output label for the concat
@@ -438,7 +438,7 @@ test('Phase 10: multi-segment treatment produces valid labeled filtergraph', asy
   assert.ok(args.includes('[outv]'), 'should map [outv] output label');
 });
 
-test('Phase 10: single-segment treatment includes base caption filters', () => {
+test('Phase 10: single-segment treatment includes base caption filters', async () => {
   const emotion = analyzeEmotion(TEST_SEGMENTS, TEST_WORDS, TEST_SILENCES, TEST_CLIP_START, TEST_CLIP_END);
   const retention = scoreRetentionArchitecture(
     classifyRetentionBeats(TEST_SEGMENTS, TEST_WORDS, emotion.events, TEST_ENERGY, TEST_SILENCES, 12, []),
@@ -455,7 +455,7 @@ test('Phase 10: single-segment treatment includes base caption filters', () => {
     { emotion, retention, motion }
   );
 
-  const treatment = buildTreatment(decision, { assFile: '/tmp/test.ass' });
+  const treatment = await buildTreatment(decision, { assFile: '/tmp/test.ass' });
   assert.ok(treatment.captionFilters.length > 0, 'assFile should produce caption filter');
   assert.ok(treatment.captionFilters[0].includes('subtitles=filename='), 'should include subtitles filter');
 });
@@ -477,7 +477,7 @@ test('Phase 12: full pipeline integration — emotion → retention → motion �
     { emotion, retention, motion }
   );
 
-  const treatment = buildTreatment(decision, {});
+  const treatment = await buildTreatment(decision, {});
   const captionEvents = buildKineticCaptions(TEST_WORDS, 0, 12, motion.cues);
   const captionQC = validateCaptions(captionEvents, motion.cues);
 

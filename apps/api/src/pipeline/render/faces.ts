@@ -127,7 +127,8 @@ export function buildFaceHighlightFilters(
   faces: FaceTrack[],
   opts: VisualEffectOptions,
   width: number,
-  height: number
+  height: number,
+  clipStart: number = 0
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
@@ -164,8 +165,13 @@ export function buildFaceHighlightFilters(
     const w = Math.max(1, Math.round(face.width * scaleX));
     const h = Math.max(1, Math.round(face.height * scaleY));
 
-    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,${face.start},${face.end})'`);
-    keyframes.push({ t: face.start, type: 'face_highlight' });
+    // Face timestamps are absolute video time; subtract clipStart so the
+    // enable expression matches the filter's relative t=0 (after trim+setpts
+    // or the -ss seek at the FFmpeg input level).
+    const faceStart = Math.max(0, face.start - clipStart);
+    const faceEnd = Math.max(0, Math.min(face.end - clipStart, faceStart + 60));
+    filters.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=${color}:t=fill:enable='between(t,${faceStart},${faceEnd})'`);
+    keyframes.push({ t: faceStart, type: 'face_highlight' });
   }
 
   return { filters, keyframes };
@@ -242,7 +248,8 @@ export async function applyVisualEffects(
   faces: FaceTrack[],
   opts: VisualEffectOptions,
   width: number,
-  height: number
+  height: number,
+  clipStart: number = 0
 ): Promise<EffectResult> {
   const result: EffectResult = { filters: [], keyframes: [] };
 
@@ -259,8 +266,8 @@ export async function applyVisualEffects(
       result.keyframes.push(...sc.keyframes);
     }
 
-    if (opts.faceHighlight) {
-      const hl = buildFaceHighlightFilters(faces, opts, width, height);
+     if (opts.faceHighlight) {
+      const hl = buildFaceHighlightFilters(faces, opts, width, height, clipStart);
       result.filters.push(...hl.filters);
       result.keyframes.push(...hl.keyframes);
     }

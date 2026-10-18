@@ -87,6 +87,13 @@ export interface ClipExport {
   exportedAt: string;
 }
 
+export interface ClipSubSegment {
+  purpose: 'hook' | 'narrative' | 'payoff' | 'transition' | 'closer' | 'bridge' | 'curiosity';
+  start: number;
+  end: number;
+  title: string;
+}
+
 export interface Clip {
   id: string;
   rank: number;
@@ -99,12 +106,23 @@ export interface Clip {
   /** Deterministic heuristic scores — always present as the safety layer. */
   heuristicScores: Scores;
   /** Which layer produced `scores`: the LLM editorial pass or the heuristic. */
-  decidedBy: 'heuristic' | 'llm';
+  decidedBy: 'heuristic' | 'llm' | 'multi-segment';
   total: number;
   reasons: string[];
   captions?: { file: string | null; events: number };
   poster?: boolean;
   exported: ClipExport | null;
+  /** Sub-segment breakdown for multi-segment clips (hook/payoff/bridge). */
+  subSegments?: ClipSubSegment[];
+  /** Predicted score after visual treatments + SFX are applied. */
+  improvedScore?: number;
+  /** Predicted viral engagement score (0–1). */
+  viralScore?: number;
+  /** Predicted number of sound effects that will be triggered. */
+  predictedSfxCount?: number;
+  /** Predicted number of motion transitions. */
+  predictedTransitions?: number;
+  notes?: string[];
 }
 
 export interface AnalysisData {

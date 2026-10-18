@@ -108,11 +108,21 @@ function buildMotionFilters(
       }
 
       case 'impact': {
-        const alpha = clamp01((cue.intensity || 0.7) * 0.4);
+        const intensity = clamp01(cue.intensity || 0.7);
+        const alpha = clamp01(intensity * 0.5);
+        const shakePixels = Math.floor(intensity * 25 + 8);
+        const zoom = 1 + intensity * 0.1;
+        const scaledW = Math.round(EXPORT_SPEC.width * zoom);
+        const scaledH = Math.round(EXPORT_SPEC.height * zoom);
+        const offsetX = Math.floor(intensity * 15);
+        const offsetY = Math.floor(intensity * 10);
         filters.push(
+          `scale=${scaledW}:${scaledH},` +
+          `crop=${EXPORT_SPEC.width - shakePixels}:${EXPORT_SPEC.height - shakePixels}:${offsetX}:${offsetY},` +
+          `pad=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(ow-iw)/2:(oh-ih)/2:color=black,` +
           `drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`
-         );
-         keyframes.push({ t, type: 'impact_flash' });
+        );
+        keyframes.push({ t, type: 'impact_shake_flash' });
         break;
       }
 
@@ -125,16 +135,6 @@ function buildMotionFilters(
           `crop=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(iw-${EXPORT_SPEC.width})/2:(ih-${EXPORT_SPEC.height})/2`
         );
         keyframes.push({ t, type: 'punch_in' });
-        break;
-      }
-
-      case 'transition': {
-        const variant = cue.variant || 'flash';
-        const alpha = clamp01((cue.intensity || 0.6) * 0.3);
-        if (variant === 'flash') {
-           filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`);
-        }
-        keyframes.push({ t, type: `transition_${variant}` });
         break;
       }
 
@@ -151,14 +151,46 @@ function buildMotionFilters(
       }
 
       case 'lower_third': {
+        const text = (cue.word || cue.label).replace(/:/g, '');
         if (cue.variant === 'action_text') {
-          const text = (cue.word || cue.label).replace(/:/g, '');
           filters.push(
             `drawbox=x=0:y=0:w=iw:h=80:color=black@0.7:t=fill:enable='between(t,${t},${r2(t + dur)})',` +
             `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=20:enable='between(t,${t},${r2(t + dur)})'`
           );
           keyframes.push({ t, type: 'action_text' });
+        } else {
+          // Sliding lower-third with text
+          const barHeight = 80;
+          const fontSize = 44;
+          const barY = EXPORT_SPEC.height - barHeight;
+          // Slide in from bottom over 0.3s, stay for duration-0.3, slide out
+          const slideInEnd = r2(t + 0.3);
+          const slideOutStart = r2(t + dur - 0.3);
+          const slideEnd = r2(t + dur);
+          // Escape commas for filter_complex parser; build sliding y with nested if/min
+          const yExpr = `(h-${barHeight})*if(lt(t\\,${slideInEnd})\\,min(1\\,(t-${t})/0.3)\\,if(gt(t\\,${slideOutStart})\\,min(1\\,(${slideEnd}-t)/0.3)\\,1))`;
+          filters.push(
+            `drawbox=x=0:y=${yExpr}:w=iw:h=${barHeight}:color=0x000000@0.85:t=fill:enable='between(t,${t},${r2(t + dur)})',` +
+            `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=${fontSize}:fontcolor=white:x=20:y=${barY + 20}:enable='between(t,${t},${r2(t + dur)})'`
+          );
+          keyframes.push({ t, type: 'lower_third_slide' });
         }
+        break;
+      }
+
+      case 'transition': {
+        const variant = cue.variant || 'flash';
+        const intensity = clamp01(cue.intensity || 0.6);
+        const alpha = clamp01(intensity * 0.6);
+        if (variant === 'flash') {
+          filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`);
+        } else if (variant === 'wipe') {
+          filters.push(`fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st=${r2(dur - 0.3)}:d=0.3:alpha=1`);
+        } else if (variant === 'pulse') {
+          const pulseAlpha = clamp01(intensity * 0.4);
+          filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=yellow@${pulseAlpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`);
+        }
+        keyframes.push({ t, type: `transition_${variant}` });
         break;
       }
 
@@ -181,6 +213,20 @@ function buildMotionFilters(
           `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${text}':fontsize=64:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${t},${r2(t + dur)})'`
         );
         keyframes.push({ t, type: 'text_card' });
+        break;
+      }
+
+      case 'pulse': {
+        const alpha = clamp01((cue.intensity || 0.6) * 0.35);
+        const zoom = 1 + (cue.intensity || 0.5) * 0.05;
+        const scaledW = Math.round(EXPORT_SPEC.width * zoom);
+        const scaledH = Math.round(EXPORT_SPEC.height * zoom);
+        filters.push(
+          `scale=${scaledW}:${scaledH},` +
+          `crop=${EXPORT_SPEC.width}:${EXPORT_SPEC.height}:(iw-${EXPORT_SPEC.width})/2:(ih-${EXPORT_SPEC.height})/2,` +
+          `drawbox=x=0:y=0:w=iw:h=ih:color=white@${alpha.toFixed(2)}:t=fill:enable='between(t,${t},${r2(t + dur)})'`
+        );
+        keyframes.push({ t, type: 'pulse' });
         break;
       }
     }
@@ -233,13 +279,13 @@ function buildSegmentFilters(
   if (seg.transitions.out) {
     allKeyframes.push({ t: seg.end, type: `transition_out_${seg.transitions.out}` });
     const fadeDur = 0.5;
-    const segDur = seg.end - seg.start;
+    const segDur = r2(seg.end - seg.start);
     if (seg.transitions.out === 'flash') {
       allFilters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=white@0.6:t=fill:enable='between(t,0,${fadeDur})'`);
     } else if (seg.transitions.out === 'wipe') {
-      allFilters.push(`fade=t=out:st=${segDur - fadeDur}:d=${fadeDur}:alpha=1`);
+      allFilters.push(`fade=t=out:st=${r2(segDur - fadeDur)}:d=${fadeDur}:alpha=1`);
     } else {
-      allFilters.push(`fade=t=out:st=${segDur - fadeDur}:d=${fadeDur}:alpha=1`);
+      allFilters.push(`fade=t=out:st=${r2(segDur - fadeDur)}:d=${fadeDur}:alpha=1`);
     }
   }
 
@@ -286,7 +332,7 @@ export async function buildTreatment(
           allKeyframes.push(...sc.keyframes);
         }
         if (opts.visualEffects?.faceHighlight) {
-          const hl = buildFaceHighlightFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height);
+          const hl = buildFaceHighlightFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height, seg.start);
           segFilters.push(...hl.filters);
           allKeyframes.push(...hl.keyframes);
         }
@@ -395,7 +441,7 @@ export function buildRenderCommand(
       for (let i = 0; i < sfxAudioFiles.length; i++) {
         const effect = sfxEffects[i];
         const delayMs = Math.round(effect.start * 1000);
-        audioChains.push(`[${i + 1}:a]adelay=delays=${delayMs}|${delayMs}[a${i}]`);
+        audioChains.push(`[${i + 1}:a]adelay=${delayMs}|${delayMs}[a${i}]`);
         sfxLabels.push(`[a${i}]`);
       }
 
@@ -432,8 +478,8 @@ export function buildRenderCommand(
       '-b:a', '128k',
       '-ar', '48000',
       '-ac', '2',
+      '-t', String(duration),
       '-movflags', '+faststart',
-      '-shortest',
       outFile,
     );
     
@@ -452,23 +498,23 @@ export function buildRenderCommand(
     args.push('-af', treatment.audioFilters.join(','));
   }
 
-  args.push(
-    '-map', '0:v:0',
-    '-map', '0:a:0?',
-    '-c:v', EXPORT_SPEC.videoCodec,
-    '-profile:v', 'high',
-    '-preset', 'veryfast',
-    '-crf', '20',
-    '-r', String(EXPORT_SPEC.fps),
-    '-pix_fmt', EXPORT_SPEC.pixFmt,
-    '-c:a', EXPORT_SPEC.audioCodec,
-    '-b:a', '128k',
-    '-ar', '48000',
-    '-ac', '2',
-    '-movflags', '+faststart',
-    '-shortest',
-    outFile,
-  );
+    args.push(
+      '-map', '0:v:0',
+      '-map', '0:a:0?',
+      '-c:v', EXPORT_SPEC.videoCodec,
+      '-profile:v', 'high',
+      '-preset', 'veryfast',
+      '-crf', '20',
+      '-r', String(EXPORT_SPEC.fps),
+      '-pix_fmt', EXPORT_SPEC.pixFmt,
+      '-c:a', EXPORT_SPEC.audioCodec,
+      '-b:a', '128k',
+      '-ar', '48000',
+      '-ac', '2',
+      '-t', String(duration),
+      '-movflags', '+faststart',
+      outFile,
+    );
 
   return args;
 }

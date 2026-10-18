@@ -1,8 +1,10 @@
 // Syntheniq — caption engine: word timestamps → phrase events → ASS track.
-// Phase 10 extension: kinetic captions with word-level animation effects.
+// Enhanced with TikTok-style animated captions: bounce, pop, slide effects,
+// bottom-third positioning with semi-transparent backgrounds, dynamic styling.
 import fs from 'node:fs';
 import type { Word } from '../../types.js';
 import type { MotionCue } from '../editorial/motion.js';
+import type { AnalysisData } from '../../types.js';
 
 export interface CaptionEvent {
   start: number;
@@ -18,6 +20,9 @@ export type KineticWordEffect =
   | 'bounce'
   | 'highlight'
   | 'color_swap'
+  | 'pulse'
+  | 'scale_up'
+  | 'slide_in'
   | 'none';
 
 export interface KineticWord {
@@ -40,7 +45,8 @@ export function toKineticWords(
   words: Word[] | undefined | null,
   clipStart: number,
   clipEnd: number,
-  motionCues?: MotionCue[]
+  motionCues?: MotionCue[],
+  analysis?: AnalysisData
 ): KineticWord[] {
   const clipLen = Math.max(0.1, clipEnd - clipStart);
   const ks = (words || [])
@@ -57,6 +63,17 @@ export function toKineticWords(
     .filter((w) => w.text.length > 0 && w.end > w.start)
     .sort((a, b) => a.start - b.start);
 
+  // Theme-aware caption intensity
+  const theme = (analysis?.structure?.stats?.theme as string) || 'general';
+  const themeIntensity: Record<string, number> = {
+    shock: 0.9,
+    listicle: 0.75,
+    tutorial: 0.6,
+    cinematic: 0.5,
+    general: 0.7,
+  };
+  const baseIntensity = themeIntensity[theme] || 0.7;
+
   const cueDurations = (motionCues || []).filter((c) => c.kind === 'emphasis').map((c) => c.duration);
   const avgCueDur = cueDurations.length ? cueDurations.reduce((a, b) => a + b, 0) / cueDurations.length : 1.5;
 
@@ -64,36 +81,59 @@ export function toKineticWords(
     const w = ks[i];
     const isPunctuation = /^[.,!?;:'"…]$/.test(w.text);
     const dur = w.end - w.start;
+    const isFirstWord = i === 0;
+    const isEndSentence = /[.!?…]$/.test(w.text);
 
-    if (isPunctuation) {
+    if (isPunctuation && (w.text === '!' || w.text === '?')) {
+      // Strong punctuation gets bounce + pop for maximum emphasis
+      w.effect = 'bounce';
+      w.emphasis = Math.min(1, baseIntensity + 0.3);
+      w.layer = Math.floor(w.emphasis * 12);
+    } else if (isPunctuation) {
       w.effect = 'pop';
-      w.emphasis = 1;
+      w.emphasis = baseIntensity;
       w.layer = 5;
     } else if (dur > 0.15) {
       const intensity = Math.min(1, dur / avgCueDur);
-      if (intensity > 0.7) {
-        w.effect = i % 2 === 0 ? 'bounce' : 'slide_left';
-        w.emphasis = intensity;
-        w.layer = Math.floor(intensity * 3);
-      } else if (intensity > 0.5) {
-        w.effect = 'color_swap';
-        w.emphasis = intensity;
-        w.layer = 3;
-      } else if (intensity > 0.4) {
+      // First word gets scale-up entrance
+      if (isFirstWord) {
+        w.effect = 'scale_up';
+        w.emphasis = Math.min(1, intensity + 0.2);
+        w.layer = 8;
+      } else if (isEndSentence) {
+        // End of sentence words get highlight
         w.effect = 'highlight';
         w.emphasis = intensity;
-        w.layer = 2;
+        w.layer = 6;
+      } else if (intensity > 0.8) {
+        w.effect = 'bounce';
+        w.emphasis = intensity;
+        w.layer = Math.floor(intensity * 3);
+      } else if (intensity > 0.6) {
+        w.effect = 'slide_in';
+        w.emphasis = intensity;
+        w.layer = 4;
+      } else if (intensity > 0.4) {
+        w.effect = 'pulse';
+        w.emphasis = intensity;
+        w.layer = 3;
       } else {
         w.effect = 'typewriter';
         w.emphasis = intensity;
         w.layer = 1;
       }
+    } else if (dur > 0.08) {
+      // Short words get subtle pop
+      w.effect = 'pop';
+      w.emphasis = dur / 0.15 * 0.5;
+      w.layer = 3;
     }
 
+    // Motion cues override for emphasis moments
     if (motionCues) {
       for (const cue of motionCues) {
         if (w.start <= cue.t - clipStart && w.end >= cue.t - clipStart && cue.kind === 'emphasis') {
-          w.effect = 'pop';
+          w.effect = 'bounce';
           w.emphasis = Math.min(1, (cue.intensity || 0.7) + 0.3);
           w.layer = 10;
         }
@@ -109,12 +149,13 @@ export function buildKineticCaptions(
   clipStart: number,
   clipEnd: number,
   motionCues?: MotionCue[],
+  analysis?: AnalysisData,
   {
-    maxWords = 4,
-    maxDur = 1.6,
+    maxWords = 5,
+    maxDur = 1.8,
   }: { maxWords?: number; maxDur?: number } = {}
 ): KineticCaptionEvent[] {
-  const kinetic = toKineticWords(words, clipStart, clipEnd, motionCues);
+  const kinetic = toKineticWords(words, clipStart, clipEnd, motionCues, analysis);
   const clipLen = Math.max(0.1, clipEnd - clipStart);
 
   const events: KineticCaptionEvent[] = [];
@@ -129,10 +170,14 @@ export function buildKineticCaptions(
     const maxLayer = Math.max(...group.map((w) => w.layer), 0);
     let style = 'neutral';
     const hasBounce = group.some((w) => w.effect === 'bounce');
-    const hasSlide = group.some((w) => w.effect === 'slide_left');
+    const hasSlideIn = group.some((w) => w.effect === 'slide_in');
+    const hasScaleUp = group.some((w) => w.effect === 'scale_up');
+    const hasPulse = group.some((w) => w.effect === 'pulse');
     const hasPop = group.some((w) => w.effect === 'pop');
     if (hasBounce) style = 'emphatic';
-    else if (hasSlide) style = 'dynamic';
+    else if (hasScaleUp) style = 'entrance';
+    else if (hasSlideIn) style = 'dynamic';
+    else if (hasPulse) style = 'rhythmic';
     else if (hasPop) style = 'punchy';
 
     events.push({
@@ -174,11 +219,17 @@ function effectParams(effect: KineticWordEffect, emphasis: number): string {
     case 'slide_right':
       return 'fs=40:x=' + (Math.round(10 + e * 10)) + '->' + (Math.round(-20 - e * 30));
     case 'bounce':
-      return 'fs=' + Math.round(40 + e * 20) + ':y=<0\\,20\\,0\\,10\\,0';
+      return 'fs=' + Math.round(40 + e * 20) + ':y=<0\\,20\\,0\\,10\\,0>';
     case 'highlight':
       return 'fs=40:boxcolor=yellow@' + (e * 0.3).toFixed(2);
     case 'color_swap':
       return 'fs=40:boxcolor=green@' + (e * 0.2).toFixed(2);
+    case 'pulse':
+      return 'fs=' + Math.round(40 + e * 10) + ':fs=' + Math.round(40 + e * 10) + ':alpha=<0\\,0.7\\,0>';
+    case 'scale_up':
+      return 'fs=' + Math.round(40 + e * 15) + ':x=50:y=50:fs=' + Math.round(40 + e * 15);
+    case 'slide_in':
+      return 'fs=40:y=' + Math.round(-30 - e * 20) + '->0';
     default:
       return 'fs=36';
   }
@@ -198,9 +249,11 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     'Style: Default,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Emphatic,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Dynamic,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Punchy,DejaVu Sans Bold,78,&H00FF8800,&H000019FF,&H80000000,&H80000000,-1,0,0,0,105,105,0.8,0,1,3,1,2,60,60,300,1',
+    'Style: Emphatic,DejaVu Sans Bold,88,&H00FFFF00,&H000019FF,&H80000000,&HC0000000,-1,0,0,0,115,115,0.5,0,1,4,2,8,60,60,280,1',
+    'Style: Dynamic,DejaVu Sans Bold,76,&H00FFFFFF,&H000019FF,&H80000000,&HC0000000,-1,0,0,0,108,108,1,0,1,3,2,8,60,60,280,1',
+    'Style: Punchy,DejaVu Sans Bold,82,&H00FF8800,&H000019FF,&H80000000,&HC0000000,-1,0,0,0,112,112,0.8,0,1,3,2,8,60,60,280,1',
+    'Style: Entrance,DejaVu Sans Bold,80,&H0019FFFF,&H000019FF,&H80000000,&HC0000000,-1,0,0,0,113,113,0.5,0,1,3,2,8,60,60,280,1',
+    'Style: Rhythmic,DejaVu Sans Bold,74,&H00FF66FF,&H000019FF,&H80000000,&HC0000000,-1,0,0,0,106,106,0.7,0,1,3,2,8,60,60,280,1',
     'Style: GreenEmphasis,DejaVu Sans Bold,82,&H0000FF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     'Style: RedEmphasis,DejaVu Sans Bold,82,&H000000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     '',
@@ -214,6 +267,8 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
       ev.style === 'emphatic' ? 'Emphatic'
       : ev.style === 'dynamic' ? 'Dynamic'
       : ev.style === 'punchy' ? 'Punchy'
+      : ev.style === 'entrance' ? 'Entrance'
+      : ev.style === 'rhythmic' ? 'Rhythmic'
       : 'Default';
 
     const layer = ev.words.length > 0 ? Math.max(...ev.words.map((w) => w.layer), 0) : 0;

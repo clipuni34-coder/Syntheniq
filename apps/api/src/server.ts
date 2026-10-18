@@ -74,6 +74,18 @@ export async function buildApp() {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   });
 
+  // Bodyless trigger endpoints (e.g. POST /export) enqueue a job and never read
+  // the request body, but Fastify still runs a content-type parser on the payload
+  // when one is present. Natively only `application/json` and `text/plain` are
+  // parsed, so any POST carrying a body under another content type — the
+  // form-urlencoded default from `curl -d`, browser/fetch defaults, etc. — is
+  // rejected with 415 before the handler runs. Accept and discard such payloads so
+  // trigger endpoints stay callable from any client. Exact parsers above (json,
+  // multipart) still win because Fastify resolves the most specific match first.
+  app.addContentTypeParser('*', { parseAs: 'string' }, (_req, _body, done) => {
+    done(null, undefined);
+  });
+
   app.setErrorHandler((err: any, req, reply) => {
     const status = typeof err.statusCode === 'number' && err.statusCode >= 400 ? err.statusCode : 500;
     if (status >= 500) {
