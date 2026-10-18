@@ -457,7 +457,6 @@ export function buildRenderCommand(
     
      // Combine all filter chains with semicolons
      const allChains = [...videoChains, ...audioChains];
-     inputs.push('-filter_complex_threads', '1');
      inputs.push('-filter_complex', allChains.join(';'));
     
      inputs.push('-map', '[outv]');
@@ -467,14 +466,12 @@ export function buildRenderCommand(
        inputs.push('-map', '0:a:0?');
      }
   
-     inputs.push('-threads', '1');
      inputs.push('-progress', 'pipe:1', '-nostats');
     inputs.push(
       '-c:v', EXPORT_SPEC.videoCodec,
       '-profile:v', 'high',
-      '-preset', 'superfast',
-      '-crf', '22',
-      '-x264-params', 'threads=1',
+      '-preset', 'veryfast',
+      '-crf', '20',
       '-r', String(EXPORT_SPEC.fps),
       '-pix_fmt', EXPORT_SPEC.pixFmt,
       '-c:a', EXPORT_SPEC.audioCodec,
@@ -495,7 +492,6 @@ export function buildRenderCommand(
     '-t', String(duration),
     '-i', input,
     '-vf', [...allVideoFilters, ...captionFilters, 'setsar=1,setparams=range=tv,format=yuv420p'].filter(Boolean).join(','),
-    '-threads', '1',
   ];
 
   if (treatment.audioFilters.length > 0) {
