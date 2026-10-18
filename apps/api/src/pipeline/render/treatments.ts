@@ -117,7 +117,7 @@ function buildMotionFilters(
       }
 
       case 'punch_in': {
-        const zoom = 1.5 + (cue.intensity || 0.7) * 1.5;
+        const zoom = Math.min(1.6, 1.5 + (cue.intensity || 0.7) * 1.5);
         const scaledW = Math.round(EXPORT_SPEC.width * zoom);
         const scaledH = Math.round(EXPORT_SPEC.height * zoom);
         filters.push(
@@ -421,11 +421,12 @@ export function buildRenderCommand(
       inputs.push('-map', '0:a:0?');
     }
     
+    inputs.push('-threads', '1');
     inputs.push(
       '-c:v', EXPORT_SPEC.videoCodec,
       '-profile:v', 'high',
-      '-preset', 'veryfast',
-      '-crf', '20',
+      '-preset', 'superfast',
+      '-crf', '22',
       '-r', String(EXPORT_SPEC.fps),
       '-pix_fmt', EXPORT_SPEC.pixFmt,
       '-c:a', EXPORT_SPEC.audioCodec,
@@ -435,7 +436,7 @@ export function buildRenderCommand(
       '-movflags', '+faststart',
       '-shortest',
       outFile,
-    );
+  );
     
     return inputs;
   }
@@ -446,6 +447,7 @@ export function buildRenderCommand(
     '-t', String(duration),
     '-i', input,
     '-vf', [...allVideoFilters, ...captionFilters, 'setsar=1,setparams=range=tv,format=yuv420p'].filter(Boolean).join(','),
+    '-threads', '1',
   ];
 
   if (treatment.audioFilters.length > 0) {
@@ -457,8 +459,8 @@ export function buildRenderCommand(
     '-map', '0:a:0?',
     '-c:v', EXPORT_SPEC.videoCodec,
     '-profile:v', 'high',
-    '-preset', 'veryfast',
-    '-crf', '20',
+    '-preset', 'superfast',
+    '-crf', '22',
     '-r', String(EXPORT_SPEC.fps),
     '-pix_fmt', EXPORT_SPEC.pixFmt,
     '-c:a', EXPORT_SPEC.audioCodec,
