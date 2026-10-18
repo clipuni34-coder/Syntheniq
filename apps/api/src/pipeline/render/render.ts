@@ -264,7 +264,7 @@ export async function buildVisualTreatment(
   const retentionInterval = profile.sfxDensity > 0.7 ? 3 : 4;
   for (let t = retentionInterval; t < clipDuration - 2; t += retentionInterval) {
     if (existingCueTimes.some((et) => Math.abs(et - t) < 1.5)) continue;
-    const cueTypes: Array<MotionCue['kind']> = ['emphasis', 'impact', 'pulse', 'transition'];
+    const cueTypes: Array<MotionCue['kind']> = ['emphasis', 'impact', 'pulse', 'transition', 'lower_third'];
     const cueType = cueTypes[Math.floor(t / retentionInterval) % cueTypes.length];
     const intensity = 0.4 + (t / clipDuration) * 0.3;
     hookCues.push({ t: round3(t), kind: cueType, intensity, label: `retention @${t.toFixed(0)}s` });
@@ -281,6 +281,29 @@ export async function buildVisualTreatment(
   if (!existingCueTimes.some((t) => Math.abs(t - payoffT) < 2)) {
     hookCues.push({ t: payoffT, kind: 'impact', intensity: 0.9, label: 'payoff punch', variant: 'flash' });
   }
+
+  // Guaranteed enhanced effects: sliding lower-third and wipe transition.
+  // These are core requirements — place them at strategic mid-clip positions,
+  // pushing past existing cues rather than skipping so the enhanced treatment
+  // always ships with sliding lower-thirds and wipe transitions.
+  const lowerThirdT = round3(clipDuration * 0.22);
+  decision.motion.cues.push({
+    kind: 'lower_third',
+    t: lowerThirdT,
+    duration: 1.5,
+    intensity: 0.5,
+    label: 'stay curious',
+  });
+
+  const wipeT = round3(clipDuration * 0.6);
+  decision.motion.cues.push({
+    kind: 'transition',
+    t: wipeT,
+    duration: 1.5,
+    intensity: 0.6,
+    label: 'scene shift',
+    variant: 'wipe',
+   });
 
   for (const hc of hookCues) {
     decision.motion.cues.push({
@@ -330,7 +353,8 @@ export async function buildVisualTreatment(
     allWords,
     clipStart,
     clipEnd,
-    decision.motion.cues
+    decision.motion.cues,
+    analysis
   );
 
   const captionQC = validateCaptions(kineticEvents, decision.motion.cues);

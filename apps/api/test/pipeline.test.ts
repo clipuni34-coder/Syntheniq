@@ -299,7 +299,7 @@ test('Phase 9: validateMotionCues flags high intensity', () => {
 test('Phase 10: toKineticWords produces word-level effects', () => {
   const kinetic = toKineticWords(TEST_WORDS, 0, 12);
   assert.ok(kinetic.length > 0);
-  assert.ok(kinetic.every((w) => Object.values(['typewriter', 'pop', 'slide_left', 'slide_right', 'bounce', 'highlight', 'none']).includes(w.effect)));
+  assert.ok(kinetic.every((w) => Object.values(['typewriter', 'pop', 'slide_left', 'slide_right', 'bounce', 'highlight', 'scale_up', 'slide_in', 'pulse', 'none']).includes(w.effect)));
 });
 
 test('Phase 10: buildKineticCaptions groups words into events', () => {
