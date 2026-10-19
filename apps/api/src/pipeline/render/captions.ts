@@ -178,7 +178,7 @@ function effectParams(effect: KineticWordEffect, emphasis: number): string {
     case 'highlight':
       return 'fs=40:boxcolor=yellow@' + (e * 0.3).toFixed(2);
     case 'color_swap':
-      return 'fs=40:boxcolor=green@' + (e * 0.2).toFixed(2);
+      return 'fs=40:boxcolor=#FFAA00@' + (e * 0.2).toFixed(2);  // orange instead of green
     default:
       return 'fs=36';
   }
@@ -201,7 +201,7 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
     'Style: Emphatic,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Dynamic,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Punchy,DejaVu Sans Bold,78,&H00FF8800,&H000019FF,&H80000000,&H80000000,-1,0,0,0,105,105,0.8,0,1,3,1,2,60,60,300,1',
-    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H0000FF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
+    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',  // yellow instead of green - avoids green box artifact
     'Style: RedEmphasis,DejaVu Sans Bold,82,&H000000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     '',
     '[Events]',

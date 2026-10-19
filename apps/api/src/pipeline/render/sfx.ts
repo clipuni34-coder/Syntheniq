@@ -57,34 +57,39 @@ async function generateSfxFile(
 
   switch (sfxType) {
     case 'whoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity}`;
+      // Sine chirp + bandpass filter → smooth whoosh, no static noise
+      filter = `sine=frequency=${150}:duration=${dur},volume=${intensity},lowpass=f=${800},afade=t=out:st=${dur - 0.3}:d=0.3`;
       break;
     case 'swoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity},afade=t=out:st=${dur - 0.3}:d=0.3`;
+      filter = `sine=frequency=${200}:duration=${dur},volume=${intensity * 0.8},lowpass=f=${1000},afade=t=out:st=${dur - 0.3}:d=0.3`;
       break;
     case 'pop':
-      filter = `sine=frequency=${freq * 2}:duration=0.05,volume=${intensity}`;
+      filter = `sine=frequency=${freq * 2}:duration=0.05,volume=${intensity * 1.5}`;
       break;
     case 'click':
-      filter = `anoisesrc=d=0.05:c=white,volume=${intensity}`;
+      // Short sine click instead of white noise
+      filter = `sine=frequency=${freq}:duration=0.02,volume=${intensity}`;
       break;
     case 'hum':
-      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.5},afade=t=in:st=0:d=0.2,afade=t=out:st=${dur - 0.2}:d=0.2`;
+      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.3},afade=t=in:st=0:d=0.2,afade=t=out:st=${dur - 0.2}:d=0.2`;
       break;
     case 'tone':
       filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity}`;
       break;
     case 'impact':
-      filter = `anoisesrc=d=0.1:c=white,volume=${intensity}`;
+      // Low sine thump instead of noise
+      filter = `sine=frequency=${100}:duration=0.1,volume=${intensity * 2}`;
       break;
     case 'footsteps':
-      filter = `anoisesrc=d=${dur}:c=brown:volume=${intensity * 0.4},asetrate=48000*1.15`;
+      // Soft sine pulses instead of brown noise + pitch shift
+      filter = `sine=frequency=120:duration=0.1,volume=${intensity * 0.4},apad=pad_dur=0.05`;
       break;
     case 'cheer':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.5},vibrato=f=5:d=0.5,afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3`;
+      // Musical tone sweep instead of noise + vibrato
+      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.5},afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3`;
       break;
     case 'swish':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.4},asetrate=48000*1.3,afade=t=out:st=${dur - 0.2}:d=0.2`;
+      filter = `sine=frequency=${180}:duration=${dur},volume=${intensity * 0.4},lowpass=f=${800},afade=t=out:st=${dur - 0.2}:d=0.2`;
       break;
     default:
       filter = `sine=frequency=440:duration=${dur},volume=${intensity}`;

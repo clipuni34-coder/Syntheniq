@@ -362,19 +362,20 @@ export async function buildTreatment(
 
   const captionFilter = buildKineticCaptionFilter(opts);
 
-  let mergedAssFile: string | null = null;
-  if (opts.assFile && opts.kineticAssFile && captionFilter) {
-    mergedAssFile = mergeASSFiles(opts.assFile, opts.kineticAssFile, opts.outDir || '');
-  }
-
-  const baseCaptionFilters = mergedAssFile
-    ? [`ass=filename='${mergedAssFile}'`]
-    : buildCaptionFilters(opts);
+  // When kinetic captions exist, use only those (word-level animated captions
+  // that include all the same text as the base captions). Skip base captions
+  // to prevent both from rendering at the same bottom-center position and
+  // overlapping. When kinetic captions don't exist, fall back to base only.
+  const baseCaptionFilters = opts.kineticAssFile && captionFilter
+    ? []
+    : (opts.assFile
+        ? [`subtitles=filename='${opts.assFile}'`]
+        : []);
 
   return {
     videoFilters,
     audioFilters,
-    captionFilter: mergedAssFile ? null : captionFilter,
+    captionFilter,
     captionFilters: baseCaptionFilters,
     motionCues: allCues,
     keyframes: allKeyframes,

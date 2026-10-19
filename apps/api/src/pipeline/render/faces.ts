@@ -131,7 +131,10 @@ export function buildFaceHighlightFilters(
 ): EffectResult {
   if (faces.length === 0) return { filters: [], keyframes: [] };
 
-  const color = opts.faceHighlightColor || '#00FF00@0.2';
+  // Face tracking data is used for attention mapping and smart framing, but
+  // drawing visible boxes on the final video is distracting. Use a nearly
+  // transparent color so faces are tracked but not visible to the viewer.
+  const color = opts.faceHighlightColor || '#FFFFFFFF@0.02';
   const filters: string[] = [];
   const keyframes: Array<{ t: number; type: string }> = [];
 
