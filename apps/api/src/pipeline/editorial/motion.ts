@@ -278,16 +278,28 @@ function deriveCuesFromEmotion(
         intensity: e.intensity * 0.8,
         label: 'crash in',
       });
-    } else if (e.type === 'recovery') {
-      cues.push({
-        kind: 'settle',
-        t: e.t,
-        duration: 2,
-        intensity: e.intensity,
-        label: 'recenter',
-      });
-    }
-  }
+     } else if (e.type === 'recovery') {
+       cues.push({
+         kind: 'settle',
+         t: e.t,
+         duration: 2,
+         intensity: e.intensity,
+         label: 'recenter',
+       });
+     }
+     // Emphasis cues trigger 'pop' animation on individual caption words
+     // that align with emotional moments — this is what creates the
+     // "viral kinetic text" effect seen on Opus Clip / Crayo AI.
+     if (e.intensity > 0.6) {
+       cues.push({
+         kind: 'emphasis',
+         t: e.t,
+         duration: 0.5,
+         intensity: e.intensity,
+         label: e.label + ' emphasis',
+       });
+     }
+   }
   return cues;
 }
 

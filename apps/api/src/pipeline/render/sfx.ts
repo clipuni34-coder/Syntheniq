@@ -117,7 +117,7 @@ export async function applySoundEffects(
   const effects: SoundEffect[] = [];
   const audioFiles: string[] = [];
   const notes: string[] = [];
-  const cacheDir = ensureDir(path.join(SFX_DIR, clipId));
+  const cacheDir = ensureDir(ctx.clipDir);
 
   onProgress(0.2, 'Planning sound effects');
 

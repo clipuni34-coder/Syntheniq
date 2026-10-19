@@ -57,8 +57,13 @@ export function toKineticWords(
     .filter((w) => w.text.length > 0 && w.end > w.start)
     .sort((a, b) => a.start - b.start);
 
-  const cueDurations = (motionCues || []).filter((c) => c.kind === 'emphasis').map((c) => c.duration);
-  const avgCueDur = cueDurations.length ? cueDurations.reduce((a, b) => a + b, 0) / cueDurations.length : 1.5;
+  // Compute average duration from actual word durations (not motion cues,
+  // which are much longer). This ensures longer-than-average words get
+  // strong effects (bounce/pop) while shorter words get subtle ones.
+  const avgWordDur = ks.length > 0
+    ? ks.reduce((sum, w) => sum + (w.end - w.start), 0) / ks.length
+    : 0.3;
+  const avgCueDur = Math.max(0.3, avgWordDur);
 
   for (let i = 0; i < ks.length; i++) {
     const w = ks[i];
@@ -166,21 +171,21 @@ function effectParams(effect: KineticWordEffect, emphasis: number): string {
   const e = Math.min(1, Math.max(0, emphasis));
   switch (effect) {
     case 'typewriter':
-      return 'fs=' + Math.round(30 + e * 10) + ':alpha=<\\h,1000\\,1>';
+      return 'fs=' + Math.round(60 + e * 20) + ':alpha=<\\h,500\\,1>';
     case 'pop':
-      return 'fs=' + Math.round(50 + e * 40) + ':alpha=<0\\,1\\,,1>0:blur=0\\,5\\,0';
+      return 'fs=' + Math.round(80 + e * 60) + ':alpha=<0\\,1\\,,1>0:blur=0\\,8\\,0';
     case 'slide_left':
-      return 'fs=40:x=' + (Math.round(-20 - e * 30)) + '->' + (Math.round(10 + e * 10));
+      return 'fs=' + Math.round(60 + e * 20) + ':x=' + (Math.round(-40 - e * 60)) + '->' + (Math.round(20 + e * 20));
     case 'slide_right':
-      return 'fs=40:x=' + (Math.round(10 + e * 10)) + '->' + (Math.round(-20 - e * 30));
+      return 'fs=' + Math.round(60 + e * 20) + ':x=' + (Math.round(20 + e * 20)) + '->' + (Math.round(-40 - e * 60));
     case 'bounce':
-      return 'fs=' + Math.round(40 + e * 20) + ':y=<0\\,20\\,0\\,10\\,0';
+      return 'fs=' + Math.round(60 + e * 30) + ':y=<0\\,30\\,0\\,15\\,0';
     case 'highlight':
-      return 'fs=40:boxcolor=yellow@' + (e * 0.3).toFixed(2);
+      return 'fs=' + Math.round(60 + e * 20) + ':boxcolor=yellow@' + (e * 0.4).toFixed(2);
     case 'color_swap':
-      return 'fs=40:boxcolor=#FFAA00@' + (e * 0.2).toFixed(2);  // orange instead of green
+      return 'fs=' + Math.round(60 + e * 20) + ':boxcolor=#FFAA00@' + (e * 0.3).toFixed(2);
     default:
-      return 'fs=36';
+      return 'fs=48';
   }
 }
 
@@ -198,10 +203,10 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     'Style: Default,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Emphatic,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
+    'Style: Emphatic,DejaVu Sans Bold,82,&H00FF8000,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Dynamic,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
     'Style: Punchy,DejaVu Sans Bold,78,&H00FF8800,&H000019FF,&H80000000,&H80000000,-1,0,0,0,105,105,0.8,0,1,3,1,2,60,60,300,1',
-    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',  // yellow instead of green - avoids green box artifact
+    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H008000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',  // magenta instead of green - avoids green box artifact
     'Style: RedEmphasis,DejaVu Sans Bold,82,&H000000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
     '',
     '[Events]',
@@ -209,7 +214,40 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
   ];
 
   for (const ev of events) {
-    const text = ev.words.map((w) => escapeAss(w.text)).join(' ');
+    // Apply per-word animation effects via ASS inline override tags.
+    // In ASS, you can wrap each word with {\\effect params} to animate
+    // individual words within a line — this is what makes kinetic captions
+    // "pop" on screen (each word bounces/slides/pops independently).
+    const text = ev.words
+      .map((w) => {
+        const params = effectParams(w.effect, w.emphasis);
+        const escaped = escapeAss(w.text);
+        if (!params) return escaped;
+
+        // Convert fx params (e.g. "fs=50:alpha=0,1,1") to ASS inline overrides
+        const overrides = params
+          .split(':')
+          .map((pair) => {
+            const [key, val] = pair.split('=');
+            if (key === 'fs') return '\\fs' + val;
+            if (key === 'alpha') return '\\alpha' + val;
+            if (key === 'blur') return '\\blur' + val;
+            return '';
+          })
+          .filter(Boolean)
+          .join('');
+
+        // Color emphasis: yellow for pop/bounce, blue for slide
+        let color = '';
+        if (w.effect === 'bounce' || w.effect === 'pop') {
+          color = '\\c&H0000FFFF';
+        } else if (w.effect === 'slide_left' || w.effect === 'slide_right') {
+          color = '\\c&H008000FF';
+        }
+
+        return '{' + overrides + color + '}' + escaped + '{' + overrides + '}';
+      })
+      .join(' ');
     const styleName =
       ev.style === 'emphatic' ? 'Emphatic'
       : ev.style === 'dynamic' ? 'Dynamic'
@@ -218,10 +256,18 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
 
     const layer = ev.words.length > 0 ? Math.max(...ev.words.map((w) => w.layer), 0) : 0;
 
+    // For single-word events, keep the Effect field populated.
+    // For multi-word events, per-word inline overrides handle the animations.
     let effect = '';
     if (ev.words.length === 1) {
       const w = ev.words[0];
-      effect = effectParams(w.effect, w.emphasis);
+      const params = effectParams(w.effect, w.emphasis);
+      effect = w.effect !== 'none' ? `${w.effect}:${params}` : params;
+    } else {
+      const effectNames = [...new Set(ev.words.map((w) => w.effect).filter((e) => e !== 'none'))];
+      if (effectNames.length > 0) {
+        effect = effectNames.join(',');
+      }
     }
 
     lines.push(

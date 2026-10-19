@@ -278,8 +278,8 @@ export async function buildVisualTreatment(
 
    // Sound effects
   const clipId = clipIdStr;
-  const sfxCtx: SfxContext = {
-    clipDir: path.join(path.dirname(videoPath), clipId),
+   const sfxCtx: SfxContext = {
+    clipDir: outDir,
     clipDuration,
   };
   const sfxResult = await applySoundEffects(decision, treatment.motionCues, clipId, sfxCtx, (frac, msg) => {
