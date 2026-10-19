@@ -3,9 +3,11 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import { run } from './lib/ffmpeg.js';
 import {
   API_ONLY,
   DATA_DIR,
@@ -73,6 +75,70 @@ export async function buildApp() {
   await app.register(multipart, {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   });
+
+    // Fastify 5 returns 415 "Unsupported media type" when a POST/PATCH/PUT
+    // request arrives without a Content-Type header — or with a content-type
+    // it can't parse (e.g. `curl -X POST ...` without `-H`, or a bodyless
+    // fetch() through Cloudflare Tunnel which injects an unknown content-type).
+    // Normalise to application/json so route handlers always receive a
+    // parseable body.  For bodyless requests we substitute `{}` via the
+    // preParsing hook below, so the JSON parser never sees an empty stream.
+    //
+    // IMPORTANT: this runs as an `onRequest` hook, NOT `preHandler`, because
+    // Fastify parses the body (and throws 415 for unknown content-types) *before*
+    // `preHandler` in the request lifecycle.  onRequest runs first, so the
+    // normalised content-type is seen by the body parser.
+    app.addHook('onRequest', async (req, reply) => {
+      const ct = String(req.headers['content-type'] || '').trim().toLowerCase();
+      if (['post', 'patch', 'put'].includes(req.method.toLowerCase())) {
+        // Skip multipart — the multipart plugin owns that parsing.
+        if (ct.startsWith('multipart/')) return;
+        // Missing or empty content-type → default to JSON (including bodyless
+        // requests; the preParsing hook will supply `{}` as needed).
+        if (ct === '' || ct === 'application/json; charset=utf-8') {
+          req.headers['content-type'] = 'application/json';
+          return;
+        }
+        // Downgrade everything except:
+        // - text/plain (Fastify's only built-in non-JSON parser)
+        // Other text/* types (text/html, text/csv) and unknown content-types
+        // have no registered parser and Fastify 5 throws 415.
+        if (ct !== 'text/plain') {
+          req.headers['content-type'] = 'application/json';
+        }
+      }
+    });
+
+    // Substitute `{}` for empty JSON bodies so Fastify's JSON parser doesn't
+    // throw "Body cannot be empty when content-type is application/json".
+    // This handles bodyless POSTs (e.g., export trigger) coming through Cloudflare
+    // Tunnel, which may inject a content-type on empty-bodied requests.
+    app.addHook('preParsing', async (req, reply, payload) => {
+      const ct = String(req.headers['content-type'] || '').trim().toLowerCase();
+      if (ct.startsWith('application/json')) {
+        if (!payload) {
+          return Readable.from([Buffer.from('{}', 'utf8')]);
+        }
+        if (typeof payload === 'string' && payload.trim() === '') {
+          return Readable.from([Buffer.from('{}', 'utf8')]);
+        }
+        if (Buffer.isBuffer(payload) && payload.length === 0) {
+          return Readable.from([Buffer.from('{}', 'utf8')]);
+        }
+        if (typeof payload.pipe === 'function' && !Buffer.isBuffer(payload) && typeof payload !== 'string') {
+          const chunks: Buffer[] = [];
+          for await (const chunk of payload) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          const body = Buffer.concat(chunks);
+          if (body.length === 0) {
+            return Readable.from([Buffer.from('{}', 'utf8')]);
+          }
+          return Readable.from([body]);
+        }
+      }
+      return payload;
+    });
 
   app.setErrorHandler((err: any, req, reply) => {
     const status = typeof err.statusCode === 'number' && err.statusCode >= 400 ? err.statusCode : 500;
@@ -169,6 +235,10 @@ async function main(): Promise<void> {
   // Never boot production on the file store or local media.
   assertProductionStores();
   ensureDir(DATA_DIR);
+  // Ensure local Whisper is available for offline transcription.
+  // Installed at build time via requirements.txt; this ensures the runtime
+  // can import faster_whisper even on a bare `node --import tsx` start.
+  await ensureWhisper();
   // Jobs persist in the store now: anything queued/running at boot is picked
   // up by the worker (leases recover orphaned claims automatically).
   const app = await buildApp();
@@ -179,6 +249,20 @@ async function main(): Promise<void> {
     `[syntheniq] store=${storeKind()} storage=${getStorage().kind} worker=${API_ONLY ? 'external' : 'embedded'} ` +
       `whisper=${OPENAI_API_KEY ? 'openai-api' : 'local-or-fallback'}`
   );
+}
+
+async function ensureWhisper(): Promise<void> {
+  try {
+    await run('python3', ['-c', 'import faster_whisper'], { timeoutMs: 5000 });
+  } catch {
+    // faster_whisper not yet installed — attempt a non-fatal install in the
+    // background so the server still boots.  Transcription gracefully falls
+    // back to the energy-based provider if this fails.
+    console.log('[syntheniq] installing faster-whisper for offline transcription…');
+    await run('pip3', ['install', '--break-system-packages', '-q', '-r', path.join(here, '..', 'requirements.txt')], { timeoutMs: 1000 * 60 * 5 }).catch((e) => {
+      console.warn('[syntheniq] faster-whisper install skipped:', (e as Error).message);
+    });
+  }
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
