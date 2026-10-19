@@ -201,11 +201,11 @@ export async function buildVisualTreatment(
     }
   );
 
-  if (decision.segments.length === 0) {
+   if (decision.segments.length === 0) {
     decision.segments.push({
       id: 'seg-1',
-      start: 0,
-      end: round3(clipDuration),
+      start: clipStart,
+      end: round3(clipEnd),
       duration: round3(clipDuration),
       source: 'main',
       title: clipTitle,

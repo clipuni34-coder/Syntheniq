@@ -304,9 +304,14 @@ export async function buildTreatment(
   const clipStart = decision.segments[0]?.start || 0;
   const isMultiSegment = decision.segments.length > 1;
 
-  for (const seg of decision.segments) {
+   for (const seg of decision.segments) {
     const { videoFilters: segFilters, keyframes } = buildSegmentFilters(seg, decision, opts);
-    allCues.push(...seg.cues);
+    // Collect cues from decision.motion.cues directly (filtered by segment range)
+    // instead of seg.cues, which may be empty due to applyCues coordinate mismatch.
+    const segCues = decision.motion.cues.filter(
+      (c) => c.t >= seg.start && c.t <= seg.end
+    );
+    allCues.push(...segCues);
     allKeyframes.push(...keyframes.map((k) => ({ t: k.t, type: k.type })));
 
     if (faces.length > 0) {
