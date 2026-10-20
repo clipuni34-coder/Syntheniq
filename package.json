@@ -18,5 +18,9 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "puppeteer": "^25.14.0",
+    "ws": "^8.22.0"
+  }
 }

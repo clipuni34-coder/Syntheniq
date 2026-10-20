@@ -1,0 +1,18 @@
+{
+  "endpoint": "GetWinTheLotteryResult",
+  "path": "/api/webapi/GetWinTheLotteryResult",
+  "typeId": 1,
+  "status": 200,
+  "body": "{\"code\":7,\"msg\":\"Parameter 'IssueNumber' cannot be empty\"}",
+  "parsed": {
+    "code": 7,
+    "msg": "Parameter 'IssueNumber' cannot be empty"
+  },
+  "requestBody": {
+    "TypeId": 1,
+    "language": 0,
+    "random": "43e469cb500e988b5fca6a68adf8de35",
+    "signature": "A137942F0C641719872CBDAE46A4959B",
+    "timestamp": 1792515131
+  }
+}

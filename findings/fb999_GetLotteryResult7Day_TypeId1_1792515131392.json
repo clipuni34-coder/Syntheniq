@@ -1,0 +1,22 @@
+{
+  "endpoint": "GetLotteryResult7Day",
+  "path": "/api/webapi/GetLotteryResult7Day",
+  "typeId": 1,
+  "status": 200,
+  "body": "{\"data\":null,\"code\":0,\"msg\":\"Succeed\",\"msgCode\":0,\"traceId\":\"\",\"serviceNowTime\":\"2026-10-20 17:52:11\"}",
+  "parsed": {
+    "data": null,
+    "code": 0,
+    "msg": "Succeed",
+    "msgCode": 0,
+    "traceId": "",
+    "serviceNowTime": "2026-10-20 17:52:11"
+  },
+  "requestBody": {
+    "TypeId": 1,
+    "language": 0,
+    "random": "2132e3f60f4fc9914115492dffd6c654",
+    "signature": "BC1C08764B2466D2E7ADC92937ABFD66",
+    "timestamp": 1792515131
+  }
+}

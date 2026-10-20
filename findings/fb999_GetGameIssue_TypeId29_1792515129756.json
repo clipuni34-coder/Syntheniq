@@ -1,0 +1,22 @@
+{
+  "endpoint": "GetGameIssue",
+  "path": "/api/webapi/GetGameIssue",
+  "typeId": 29,
+  "status": 200,
+  "body": "{\"data\":null,\"code\":13,\"msg\":null,\"msgCode\":-1,\"traceId\":\"\",\"serviceNowTime\":\"2026-10-20 17:52:10\"}",
+  "parsed": {
+    "data": null,
+    "code": 13,
+    "msg": null,
+    "msgCode": -1,
+    "traceId": "",
+    "serviceNowTime": "2026-10-20 17:52:10"
+  },
+  "requestBody": {
+    "TypeId": 29,
+    "language": 0,
+    "random": "a7e04156521d440a0e1fc0553b3606ec",
+    "signature": "344E9895EC878FB45289A13FB3591E5A",
+    "timestamp": 1792515129
+  }
+}

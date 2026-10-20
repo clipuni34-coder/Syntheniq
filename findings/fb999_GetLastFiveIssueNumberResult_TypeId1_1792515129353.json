@@ -1,0 +1,24 @@
+{
+  "endpoint": "GetLastFiveIssueNumberResult",
+  "path": "/api/webapi/GetLastFiveIssueNumberResult",
+  "typeId": 1,
+  "status": 200,
+  "body": "{\"data\":{\"number\":\"6,9,2,4,4\"},\"code\":0,\"msg\":\"Succeed\",\"msgCode\":0,\"traceId\":\"\",\"serviceNowTime\":\"2026-10-20 17:52:09\"}",
+  "parsed": {
+    "data": {
+      "number": "6,9,2,4,4"
+    },
+    "code": 0,
+    "msg": "Succeed",
+    "msgCode": 0,
+    "traceId": "",
+    "serviceNowTime": "2026-10-20 17:52:09"
+  },
+  "requestBody": {
+    "TypeId": 1,
+    "language": 0,
+    "random": "06c8eaf920680f3d7cc06a18cfe6c928",
+    "signature": "AB9B27E526565EA718E360EEEE4C1CCD",
+    "timestamp": 1792515129
+  }
+}

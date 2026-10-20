@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-10-20T17:30:52.005Z",
+  "connectionSuccess": true,
+  "connectionAck": true,
+  "sentCount": 9,
+  "receivedCount": 13,
+  "eventsCount": 0,
+  "keepaliveCount": 2,
+  "sentMessages": [
+    "{\"type\":\"connection_init\",\"payload\":{\"authorization\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwNzAiLCJpYXQiOjE3OTI1MTQ4ODEsImp0aSI6ImRjYmM4MWExLTJiOGQtNDUyMS1hMThlLTAxMWQwYzk2MGEwYiIsIm5iZiI6MTc5MjUxNDg4MSwiZXhwIjoxNzkyNjAxMjgxLCJpc3MiOiJodHRwczovL3Byby12My1wYXlwbGF0Zm9ybS1hdXRoLmFkbWluLWJyb2FkY2FzdC5jb20ifQ.HWmbiMOEL6wBVlAXI0kh4qU9lZlKnrLgmeO9blKeNFIdpMnDfUNQ-oyBmk318odkwDICiZ2AK3Fhm_pXhJ9m4Q-87Btd0mP18xNG5IKArL-bc6CuxDzmDH94sdXV3R-xe3LV-jZIMuri_gdf-WsPwHkKV368Ad3Bk7p_qayimLeV4oMQq0FDmOETqfpfVlrhODiO3MZPD5jvd52Y987M11O5jhwpJDnvk8E_Uqcy0iBoBOQJsSx9Byf7_Tzl9U8CYNuya4bo4qMokcg_dddecoopadZiZnv55Jdov-QFMdioA8rUiBxXSMrBVhwLOXZtS0Cg9Q4rAVnINMJy2Eg1vg\",\"host\":\"pro-v3-payplatform.admin-broadcast.com\"}}",
+    "{\"id\":\"0f4b8d36-dad6-40ff-9d4c-70f8423ead57\",\"type\":\"subscribe\",\"payload\":{\"query\":\"subscription { subscribe { data topic } }\",\"variables\":{},\"extensions\":{\"subscription\":{\"read\":{\"topics\":{\"url\":\"/WebApi/1004/userid/364070\"}}}}}}",
+    "{\"type\":\"subscribe\",\"id\":\"e1354ff5-f6ca-4bdc-a02a-ef28dc8c17be\",\"channel\":\"/WebApi/1004/userid/364070\",\"authorization\":{\"authorization\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwNzAiLCJpYXQiOjE3OTI1MTQ4ODEsImp0aSI6ImRjYmM4MWExLTJiOGQtNDUyMS1hMThlLTAxMWQwYzk2MGEwYiIsIm5iZiI6MTc5MjUxNDg4MSwiZXhwIjoxNzkyNjAxMjgxLCJpc3MiOiJodHRwczovL3Byby12My1wYXlwbGF0Zm9ybS1hdXRoLmFkbWluLWJyb2FkY2FzdC5jb20ifQ.HWmbiMOEL6wBVlAXI0kh4qU9lZlKnrLgmeO9blKeNFIdpMnDfUNQ-oyBmk318odkwDICiZ2AK3Fhm_pXhJ9m4Q-87Btd0mP18xNG5IKArL-bc6CuxDzmDH94sdXV3R-xe3LV-jZIMuri_gdf-WsPwHkKV368Ad3Bk7p_qayimLeV4oMQq0FDmOETqfpfVlrhODiO3MZPD5jvd52Y987M11O5jhwpJDnvk8E_Uqcy0iBoBOQJsSx9Byf7_Tzl9U8CYNuya4bo4qMokcg_dddecoopadZiZnv55Jdov-QFMdioA8rUiBxXSMrBVhwLOXZtS0Cg9Q4rAVnINMJy2Eg1vg\",\"host\":\"pro-v3-payplatform.admin-broadcast.com\"}}",
+    "{\"id\":\"6cbba45a-aff7-4f28-864a-1afa8430a438\",\"type\":\"subscribe\",\"payload\":{\"query\":\"subscription { subscribe { data topic } }\",\"variables\":{},\"extensions\":{\"subscription\":{\"read\":{\"topics\":{\"url\":\"/WebApi/1004/lottery/WinGo\"}}}}}}",
+    "{\"type\":\"subscribe\",\"id\":\"0cd53dcb-e7a3-41db-b7bc-e8d9c5294637\",\"channel\":\"/WebApi/1004/lottery/WinGo\",\"authorization\":{\"authorization\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwNzAiLCJpYXQiOjE3OTI1MTQ4ODEsImp0aSI6ImRjYmM4MWExLTJiOGQtNDUyMS1hMThlLTAxMWQwYzk2MGEwYiIsIm5iZiI6MTc5MjUxNDg4MSwiZXhwIjoxNzkyNjAxMjgxLCJpc3MiOiJodHRwczovL3Byby12My1wYXlwbGF0Zm9ybS1hdXRoLmFkbWluLWJyb2FkY2FzdC5jb20ifQ.HWmbiMOEL6wBVlAXI0kh4qU9lZlKnrLgmeO9blKeNFIdpMnDfUNQ-oyBmk318odkwDICiZ2AK3Fhm_pXhJ9m4Q-87Btd0mP18xNG5IKArL-bc6CuxDzmDH94sdXV3R-xe3LV-jZIMuri_gdf-WsPwHkKV368Ad3Bk7p_qayimLeV4oMQq0FDmOETqfpfVlrhODiO3MZPD5jvd52Y987M11O5jhwpJDnvk8E_Uqcy0iBoBOQJsSx9Byf7_Tzl9U8CYNuya4bo4qMokcg_dddecoopadZiZnv55Jdov-QFMdioA8rUiBxXSMrBVhwLOXZtS0Cg9Q4rAVnINMJy2Eg1vg\",\"host\":\"pro-v3-payplatform.admin-broadcast.com\"}}",
+    "{\"id\":\"422678c8-2458-4dd2-a106-11345be7a0c0\",\"type\":\"subscribe\",\"payload\":{\"query\":\"subscription { subscribe { data topic } }\",\"variables\":{},\"extensions\":{\"subscription\":{\"read\":{\"topics\":{\"url\":\"/WebApi/1004/lottery/WinGo_30S\"}}}}}}",
+    "{\"type\":\"subscribe\",\"id\":\"59364ec8-b174-4a8b-ba9a-ff0b7b39daf4\",\"channel\":\"/WebApi/1004/lottery/WinGo_30S\",\"authorization\":{\"authorization\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwNzAiLCJpYXQiOjE3OTI1MTQ4ODEsImp0aSI6ImRjYmM4MWExLTJiOGQtNDUyMS1hMThlLTAxMWQwYzk2MGEwYiIsIm5iZiI6MTc5MjUxNDg4MSwiZXhwIjoxNzkyNjAxMjgxLCJpc3MiOiJodHRwczovL3Byby12My1wYXlwbGF0Zm9ybS1hdXRoLmFkbWluLWJyb2FkY2FzdC5jb20ifQ.HWmbiMOEL6wBVlAXI0kh4qU9lZlKnrLgmeO9blKeNFIdpMnDfUNQ-oyBmk318odkwDICiZ2AK3Fhm_pXhJ9m4Q-87Btd0mP18xNG5IKArL-bc6CuxDzmDH94sdXV3R-xe3LV-jZIMuri_gdf-WsPwHkKV368Ad3Bk7p_qayimLeV4oMQq0FDmOETqfpfVlrhODiO3MZPD5jvd52Y987M11O5jhwpJDnvk8E_Uqcy0iBoBOQJsSx9Byf7_Tzl9U8CYNuya4bo4qMokcg_dddecoopadZiZnv55Jdov-QFMdioA8rUiBxXSMrBVhwLOXZtS0Cg9Q4rAVnINMJy2Eg1vg\",\"host\":\"pro-v3-payplatform.admin-broadcast.com\"}}",
+    "{\"id\":\"8be6a207-9c2a-4e17-b7a3-9fe006e04264\",\"type\":\"subscribe\",\"payload\":{\"query\":\"subscription { subscribe { data topic } }\",\"variables\":{},\"extensions\":{\"subscription\":{\"read\":{\"topics\":{\"url\":\"/WebApi/1004/game/WinGo_30S\"}}}}}}",
+    "{\"type\":\"subscribe\",\"id\":\"bf249072-ea0d-4283-84f7-c466aa0daebe\",\"channel\":\"/WebApi/1004/game/WinGo_30S\",\"authorization\":{\"authorization\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwNzAiLCJpYXQiOjE3OTI1MTQ4ODEsImp0aSI6ImRjYmM4MWExLTJiOGQtNDUyMS1hMThlLTAxMWQwYzk2MGEwYiIsIm5iZiI6MTc5MjUxNDg4MSwiZXhwIjoxNzkyNjAxMjgxLCJpc3MiOiJodHRwczovL3Byby12My1wYXlwbGF0Zm9ybS1hdXRoLmFkbWluLWJyb2FkY2FzdC5jb20ifQ.HWmbiMOEL6wBVlAXI0kh4qU9lZlKnrLgmeO9blKeNFIdpMnDfUNQ-oyBmk318odkwDICiZ2AK3Fhm_pXhJ9m4Q-87Btd0mP18xNG5IKArL-bc6CuxDzmDH94sdXV3R-xe3LV-jZIMuri_gdf-WsPwHkKV368Ad3Bk7p_qayimLeV4oMQq0FDmOETqfpfVlrhODiO3MZPD5jvd52Y987M11O5jhwpJDnvk8E_Uqcy0iBoBOQJsSx9Byf7_Tzl9U8CYNuya4bo4qMokcg_dddecoopadZiZnv55Jdov-QFMdioA8rUiBxXSMrBVhwLOXZtS0Cg9Q4rAVnINMJy2Eg1vg\",\"host\":\"pro-v3-payplatform.admin-broadcast.com\"}}"
+  ],
+  "receivedMessages": [
+    "{\"type\":\"connection_ack\",\"connectionTimeoutMs\":300000}",
+    "{\"type\":\"ka\"}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"id\":\"e1354ff5-f6ca-4bdc-a02a-ef28dc8c17be\",\"type\":\"subscribe_success\"}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"id\":\"0cd53dcb-e7a3-41db-b7bc-e8d9c5294637\",\"type\":\"subscribe_success\"}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"id\":\"59364ec8-b174-4a8b-ba9a-ff0b7b39daf4\",\"type\":\"subscribe_error\",\"errors\":[{\"errorType\":\"BadRequestException\",\"message\":\"Invalid Channel Format\"}]}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"id\":\"bf249072-ea0d-4283-84f7-c466aa0daebe\",\"type\":\"subscribe_error\",\"errors\":[{\"errorType\":\"BadRequestException\",\"message\":\"Invalid Channel Format\"}]}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"type\":\"error\",\"errors\":[{\"errorType\":\"UnsupportedOperation\",\"message\":\"Operation not supported through the realtime channel\"}]}",
+    "{\"type\":\"ka\"}"
+  ],
+  "events": [],
+  "wsConfig": {
+    "host": "pro-v3-payplatform.admin-broadcast.com",
+    "path": "/event/realtime?Token=eyJhbGciOiJSUzI1NiIsImtpZCI6IkxvdHRvU2FhcyIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNjQwN"
+  },
+  "channelsSubscribed": [
+    "/WebApi/1004/userid/364070",
+    "/WebApi/1004/lottery/WinGo",
+    "/WebApi/1004/lottery/WinGo_30S",
+    "/WebApi/1004/game/WinGo_30S"
+  ],
+  "elapsedTimeMs": 62810
+}

@@ -1,0 +1,28 @@
+{
+  "endpoint": "GetGameIssue",
+  "path": "/api/webapi/GetGameIssue",
+  "typeId": 30,
+  "status": 200,
+  "body": "{\"data\":{\"issueNumber\":\"20261020100052025\",\"startTime\":\"2026-10-20 17:52:00\",\"endTime\":\"2026-10-20 17:52:30\",\"serviceTime\":\"2026-10-20 17:52:09\",\"intervalM\":0.50},\"code\":0,\"msg\":\"Succeed\",\"msgCode\":0,\"traceId\":\"\",\"serviceNowTime\":\"2026-10-20 17:52:09\"}",
+  "parsed": {
+    "data": {
+      "issueNumber": "20261020100052025",
+      "startTime": "2026-10-20 17:52:00",
+      "endTime": "2026-10-20 17:52:30",
+      "serviceTime": "2026-10-20 17:52:09",
+      "intervalM": 0.5
+    },
+    "code": 0,
+    "msg": "Succeed",
+    "msgCode": 0,
+    "traceId": "",
+    "serviceNowTime": "2026-10-20 17:52:09"
+  },
+  "requestBody": {
+    "TypeId": 30,
+    "language": 0,
+    "random": "9b01975bdb2294be45911c83796c1e60",
+    "signature": "8F29D0B73EBF58D147463883AA39243E",
+    "timestamp": 1792515129
+  }
+}
