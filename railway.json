@@ -1,10 +1,11 @@
 {
   "deploy": {
-    "startCommand": "bash apps/api/start.sh",
+    "startCommand": "node app.js",
     "healthcheck": {
-      "path": "/v1/health",
-      "interval": "60s",
+      "path": "/health",
+      "interval": "30s",
       "timeout": "10s"
-    }
+    },
+    "restartPolicyType": "always"
   }
 }

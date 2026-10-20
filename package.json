@@ -1,24 +1,18 @@
 {
-  "name": "syntheniq",
-  "version": "0.1.0",
+  "name": "wingo-race-condition",
+  "version": "1.0.0",
   "private": true,
-  "description": "Syntheniq — AI video editing platform: long video in, story-driven vertical shorts out.",
-  "workspaces": [
-    "apps/*"
-  ],
+  "description": "WinGo_30S Race Condition Exploiter - Railway deployment",
   "scripts": {
-    "dev:api": "npm --workspace @syntheniq/api run dev",
-    "dev:web": "npm --workspace @syntheniq/web run dev",
-    "build:api": "npm --workspace @syntheniq/api run build",
-    "build:web": "npm --workspace @syntheniq/web run build",
-    "start:api": "npm --workspace @syntheniq/api run start",
-    "test": "npm --workspace @syntheniq/api run test",
-    "fixtures": "npm --workspace @syntheniq/api run fixtures"
+    "start": "node app.js",
+    "dev": "node app.js",
+    "refresh": "node scripts/refreshJwt.js",
+    "race": "node scripts/winGoRaceFinal.js"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "puppeteer": "^25.14.0",
     "ws": "^8.22.0"
