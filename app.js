@@ -123,10 +123,9 @@ function refreshJwt() {
     console.log('Refreshing JWT token...');
     
     const puppeteer = require('puppeteer');
-    
-    puppeteer.launch({
+    // Use puppeteer's bundled Chromium (not system Chromium which may not exist)
+    const browserOpts = {
       headless: 'new',
-      executablePath: process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
       ignoreHTTPSErrors: true,
       args: [
         '--no-sandbox',
@@ -137,7 +136,18 @@ function refreshJwt() {
         '--disable-blink-features=AutomationDetected,IsolateOrigins,IOSurfaceSharing',
         '--disable-features=EncryptedClientHello'
       ]
-    }).then(async (browser) => {
+    };
+
+    // Try system Chromium first, fall back to puppeteer's bundled Chromium
+    try {
+      const execPath = puppeteer.executablePath();
+      console.log('Chromium executable:', execPath);
+      browserOpts.executablePath = execPath;
+    } catch (e) {
+      console.log('Using default Chromium');
+    }
+
+    puppeteer.launch(browserOpts).then(async (browser) => {
       const page = await browser.newPage();
       await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
       await page.setViewport({ width: 414, height: 896, isMobile: true });
