@@ -1,6 +1,6 @@
 FROM node:18-slim
 
-# Install Chromium dependencies (Debian packages)
+# Install Chromium with all dependencies + additional libraries for puppeteer
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y \
     libgcc1 \
     libglib2.0-0 \
     libgtk-3-0 \
-    libnspr4 \
     libnss3 \
+    libnspr4 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libstdc++6 \
@@ -46,8 +46,12 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install app dependencies (puppeteer will download its own Chromium)
+# Install app dependencies
+# PUPPETEER_SKIP_DOWNLOAD is not set, so puppeteer will download Chromium
 RUN npm install
+
+# Verify Chromium is available
+RUN ls -la /root/.cache/puppeteer/ 2>/dev/null || echo "No puppeteer cache found"
 
 # Copy app source
 COPY . .
