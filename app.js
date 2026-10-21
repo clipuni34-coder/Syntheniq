@@ -43,6 +43,7 @@ const state = {
   lastResult: null,
   lastRaceWindow: null,
   lastLoginError: null,
+  bettingEnabled: true,  // Toggle: false to stop placing bets
   stats: {
     roundsDetected: 0,
     raceWindowsFound: 0,
@@ -519,10 +520,14 @@ async function startRaceMonitoring() {
             'success'
           );
           
-          // Place race bets on the NEXT open round (not the already-closed one)
-          await executeRaceBets(resultColor, config.next?.issueNumber || config.current.issueNumber);
-          
-          raceWindow = false;
+            // Place race bets only if betting is enabled
+            if (state.bettingEnabled) {
+              await executeRaceBets(resultColor, config.next?.issueNumber || config.current.issueNumber);
+            } else {
+              console.log('Betting paused - race window detected but not placing bets');
+            }
+           
+           raceWindow = false;
         }
       }
       
@@ -540,15 +545,16 @@ async function startRaceMonitoring() {
 async function executeRaceBets(color, issueNumber) {
   console.log(`Executing race bets on ${color}...`);
   
-  const betPromises = [];
-  for (let i = 0; i < 50; i++) {
+    const betPromises = [];
+    const BET_COUNT = 1;  // 1 bet per race window (human-like)
+    for (let i = 0; i < BET_COUNT; i++) {
     const body = JSON.stringify(signParams({
       TypeId: 30,
       lottery: 'WinGo',
       gameCode: 'WinGo_30S',
       issueNumber: issueNumber,
       BetCount: 1,
-      Amount: 1,
+       Amount: 100,  // ₦100 bet amount
       SelectType: color
     }));
     
@@ -626,6 +632,7 @@ app.get('/api/status', (req, res) => {
     jwt_valid: !!state.jwt && state.jwtExpiry > Math.floor(Date.now() / 1000),
     jwt_expires: state.jwtExpiry ? new Date(state.jwtExpiry * 1000).toISOString() : null,
     monitoring: state.monitoring,
+    betting_enabled: state.bettingEnabled,
     lastResult: state.lastResult,
     lastRaceWindow: state.lastRaceWindow,
     lastLoginError: state.lastLoginError,
@@ -653,6 +660,20 @@ app.post('/api/start-monitoring', (req, res) => {
   } else {
     res.json({ already_running: true });
   }
+});
+
+app.post('/api/stop-betting', (req, res) => {
+  state.bettingEnabled = false;
+  res.json({ betting_enabled: false });
+});
+
+app.post('/api/start-betting', (req, res) => {
+  state.bettingEnabled = true;
+  res.json({ betting_enabled: true });
+});
+
+app.get('/api/betting-status', (req, res) => {
+  res.json({ betting_enabled: state.bettingEnabled });
 });
 
 // === Initialize ===
