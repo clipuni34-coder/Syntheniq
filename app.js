@@ -399,6 +399,17 @@ async function executeRaceBets(color, issueNumber) {
 }
 
 // === Express Routes ===
+app.get('/', (req, res) => {
+  res.json({
+    name: 'WinGo_30S Race Condition App',
+    status: 'running',
+    health: 'https://wingo-racer.onrender.com/health',
+    api: 'https://wingo-racer.onrender.com/api/status',
+    events: 'https://wingo-racer.onrender.com/api/events',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
