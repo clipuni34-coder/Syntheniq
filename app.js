@@ -106,6 +106,11 @@ function httpRequest(hostname, path, method = 'GET', body = null, headers = {}) 
 }
 
 // === JWT Management ===
+function toLocalNumber(full) {
+  const n = String(full || '').replace(/\s+/g, '').replace(/^\+/, '');
+  return n.startsWith('234') ? n.slice(3) : n;
+}
+
 function loadJwt() {
   try {
     const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
@@ -119,148 +124,259 @@ function loadJwt() {
   return null;
 }
 
-function refreshJwt() {
-  return new Promise((resolve) => {
-    console.log('Refreshing JWT token...');
-    
-    const puppeteer = require('puppeteer');
-    // Use puppeteer's bundled Chromium (not system Chromium which may not exist)
-    const browserOpts = {
-      headless: 'new',
-      ignoreHTTPSErrors: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--window-size=414,896',
-        '--ignore-certificate-errors',
-        '--disable-blink-features=AutomationDetected,IsolateOrigins,IOSurfaceSharing',
-        '--disable-features=EncryptedClientHello'
-      ]
-    };
-
-    // Try system Chromium first, fall back to puppeteer's bundled Chromium
-    try {
-      const execPath = puppeteer.executablePath();
-      console.log('Chromium executable:', execPath);
-      browserOpts.executablePath = execPath;
-    } catch (e) {
-      console.log('Using default Chromium');
-    }
-
-    puppeteer.launch(browserOpts).then(async (browser) => {
-      const page = await browser.newPage();
-      await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
-      await page.setViewport({ width: 414, height: 896, isMobile: true });
-      
-     try {
-         await page.goto('https://fb999.com/#/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-         await new Promise(r => setTimeout(r, 3000));
-         
-         // Fill credentials - try multiple selectors
-         try {
-           await page.waitForSelector('input[name="userNumber"]', { timeout: 10000 });
-           await page.type('input[name="userNumber"]', FB999_PHONE, { delay: 100 });
-         } catch (e) {
-           state.lastLoginError = 'Could not find userNumber input: ' + e.message;
-           console.error('userNumber input:', e.message);
-           // Take screenshot for debugging
-           await page.screenshot({ path: '/tmp/login_error.png' }).catch(() => {});
-           resolve(false);
-           return;
-         }
-         
-         try {
-           const pwdField = await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
-           await pwdField.type(FB999_PASSWORD, { delay: 100 });
-         } catch (e) {
-           state.lastLoginError = 'Could not find password input: ' + e.message;
-           console.error('Password input:', e.message);
-           await page.screenshot({ path: '/tmp/login_error2.png' }).catch(() => {});
-           resolve(false);
-           return;
-         }
-         
-         // Click login
-         try {
-           await page.waitForFunction(() => {
-             const btns = Array.from(document.querySelectorAll('button'));
-             return btns.some(b => b.textContent.trim().toLowerCase().includes('login'));
-           }, { timeout: 15000 });
-           
-           await page.evaluate(() => {
-             const btn = Array.from(document.querySelectorAll('button'))
-               .find(b => b.textContent.trim().toLowerCase().includes('login'));
-             if (btn) btn.click();
-           });
-         } catch (e) {
-           state.lastLoginError = 'Could not find login button: ' + e.message;
-           console.error('Login button:', e.message);
-           resolve(false);
-           return;
-         }
-         
-         // Wait for response
-         await page.waitForTimeout(8000);
-         
-         // Check localStorage for token
-         const storage = await page.evaluate(() => {
-           const result = {};
-           for (let i = 0; i < localStorage.length; i++) {
-             const key = localStorage.key(i);
-             if (key) result[key] = localStorage.getItem(key);
-           }
-           return result;
-         });
-         
-         console.log('LocalStorage keys after login:', Object.keys(storage));
-         
-         const token = storage.ar_token || storage.token;
-         if (token) {
-           console.log('JWT refreshed successfully!');
-           
-           // Get token expiry from JWT
-           const parts = token.split('.');
-           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-           const exp = payload.exp || (Math.floor(Date.now() / 1000) + 1800);
-           
-           state.jwt = token;
-           state.jwtExpiry = exp;
-           state.lastLoginError = null;
-           
-           // Save to file
-           const loginResponse = {
-             data: {
-               token: token,
-               expiresIn: exp,
-               webSocketUrl: storage.ar_ws_url,
-               webSocketChannels: storage.ar_ws_channels
-             },
-             code: 0,
-             msg: 'Succeed'
-           };
-           fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(loginResponse, null, 2));
-           
-           resolve(true);
-         } else {
-           state.lastLoginError = 'No token found in localStorage. Storage keys: ' + Object.keys(storage).join(', ');
-           console.log('No token found in localStorage');
-           console.log('Storage:', JSON.stringify(storage).substring(0, 500));
-           await page.screenshot({ path: '/tmp/no_token.png' }).catch(() => {});
-           resolve(false);
-         }
-       } catch (e) {
-         state.lastLoginError = 'Login error: ' + e.message;
-         console.error('Login error:', e.message);
-         resolve(false);
-       } finally {
-         await browser.close();
-       }
-    }).catch(err => {
-      console.error('Browser launch error:', err.message);
-      resolve(false);
+// Capture the POST /Login API response (single attempt)
+function waitForLoginResponse(page, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Timed out after ${timeoutMs}ms waiting for POST /Login response`)),
+      timeoutMs
+    );
+    page.on('response', async res => {
+      try {
+        if (res.request().method() !== 'POST') return;
+        const url = res.url();
+        if (!url.includes('fb999api.com') || !url.endsWith('/Login')) return;
+        let reqBody = '';
+        try { reqBody = res.request().postData() || ''; } catch (e) { reqBody = ''; }
+        if (!reqBody || !reqBody.includes('username')) return; // skip empty duplicate
+        clearTimeout(timer);
+        let body = '';
+        try { body = await res.text(); } catch (e) { body = ''; }
+        let json = null, parseError = null;
+        try { json = body ? JSON.parse(body) : null; } catch (e) { parseError = e.message; }
+        resolve({ status: res.status(), body, json, parseError });
+      } catch (e) {
+        /* keep listening */
+      }
     });
   });
+}
+
+async function refreshJwt() {
+  console.log('Refreshing JWT token...');
+  
+  const puppeteer = require('puppeteer');
+  const LOCAL_NUMBER = toLocalNumber(FB999_PHONE);
+  
+  console.log('  Phone:', FB999_PHONE);
+  console.log('  Local number:', LOCAL_NUMBER);
+  
+  // Try system Chromium first, fall back to puppeteer's bundled Chromium
+  let executablePath = null;
+  try {
+    // Check if system Chromium exists
+    if (fs.existsSync('/usr/bin/chromium')) {
+      executablePath = '/usr/bin/chromium';
+    } else if (fs.existsSync('/usr/bin/chromium-browser')) {
+      executablePath = '/usr/bin/chromium-browser';
+    } else {
+      executablePath = puppeteer.executablePath();
+    }
+    console.log('  Chromium executable:', executablePath);
+  } catch (e) {
+    console.log('  Using default Chromium');
+  }
+  
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath,
+    ignoreHTTPSErrors: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--window-size=414,896',
+      '--ignore-certificate-errors',
+      '--disable-blink-features=AutomationDetected,IsolateOrigins,IOSurfaceSharing',
+      '--disable-features=EncryptedClientHello'
+    ]
+  });
+  
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
+  await page.setViewport({ width: 414, height: 896, isMobile: true });
+  
+  // Capture login requests for debugging
+  let loginRequests = [];
+  page.on('request', req => {
+    try {
+      const url = req.url();
+      if (url.includes('fb999api.com') && url.endsWith('/Login')) {
+        loginRequests.push({
+          method: req.method(),
+          url,
+          postData: req.postData() || '',
+        });
+      }
+    } catch (e) {}
+  });
+  
+  page.on('console', msg => console.log(`  [page] ${msg.text()}`));
+  
+  try {
+    // Navigate to login page
+    console.log('  Navigating to fb999.com/#/login...');
+    await page.goto('https://fb999.com/#/login', { waitUntil: 'networkidle2', timeout: 30000 });
+    await new Promise(r => setTimeout(r, 3000));
+    
+    // Fill local phone number
+    try {
+      await page.waitForSelector('input[name="userNumber"]', { visible: true, timeout: 10000 });
+      await page.click('input[name="userNumber"]');
+      await page.type('input[name="userNumber"]', LOCAL_NUMBER, { delay: 40 });
+      console.log('  Filled userNumber:', LOCAL_NUMBER);
+    } catch (e) {
+      state.lastLoginError = 'Could not find userNumber input: ' + e.message;
+      console.error('  userNumber input error:', e.message);
+      await page.screenshot({ path: '/tmp/login_error_user.png' }).catch(() => {});
+      return false;
+    }
+    
+    // Fill password (first VISIBLE password input)
+    try {
+      const pwdHandle = await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
+      await pwdHandle.click();
+      await pwdHandle.type(FB999_PASSWORD, { delay: 40 });
+      console.log('  Filled password');
+    } catch (e) {
+      state.lastLoginError = 'Could not find password input: ' + e.message;
+      console.error('  Password input error:', e.message);
+      await page.screenshot({ path: '/tmp/login_error_pwd.png' }).catch(() => {});
+      return false;
+    }
+    
+    // Click the visible "Log in" button (must be visible + match regex)
+    try {
+      console.log('  Waiting for "Log in" button...');
+      await page.waitForFunction(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        return btns.some(b => {
+          const r = b.getBoundingClientRect();
+          const s = window.getComputedStyle(b);
+          return r.width > 0 && r.height > 0
+            && s.visibility !== 'hidden' && s.display !== 'none'
+            && b.offsetParent !== null
+            && /log\s*in/i.test(b.textContent || '');
+        });
+      }, { timeout: 15000 });
+      
+      const clicked = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        for (const b of btns) {
+          const r = b.getBoundingClientRect();
+          const s = window.getComputedStyle(b);
+          const visible = r.width > 0 && r.height > 0
+            && s.visibility !== 'hidden' && s.display !== 'none'
+            && b.offsetParent !== null;
+          if (!visible) continue;
+          if (/log\s*in/i.test(b.textContent || '')) {
+            b.click();
+            return { found: true, text: b.textContent.trim(), className: b.className };
+          }
+        }
+        return { found: false };
+      });
+      console.log('  Submit button clicked:', JSON.stringify(clicked));
+      
+      if (!clicked.found) {
+        state.lastLoginError = 'No visible "Log in" button found';
+        return false;
+      }
+    } catch (e) {
+      state.lastLoginError = 'Could not find visible login button: ' + e.message;
+      console.error('  Login button error:', e.message);
+      await page.screenshot({ path: '/tmp/login_error_btn.png' }).catch(() => {});
+      return false;
+    }
+    
+    // Wait for the /Login API response
+    console.log('  Waiting for /Login API response...');
+    let resp;
+    try {
+      resp = await waitForLoginResponse(page, 30000);
+      console.log('  /Login response received, status:', resp.status);
+    } catch (e) {
+      state.lastLoginError = 'No /Login API response: ' + e.message;
+      console.error('  /Login response error:', e.message);
+      await page.screenshot({ path: '/tmp/login_error_resp.png' }).catch(() => {});
+      return false;
+    }
+    
+    // Log the request body that was sent
+    if (loginRequests.length > 0) {
+      console.log('  /Login request body:', loginRequests[0].postData);
+    }
+    
+    // Allow SPA to set localStorage
+    await new Promise(r => setTimeout(r, 3000));
+    
+    // Read localStorage
+    const storage = await page.evaluate(() => {
+      const result = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) result[key] = localStorage.getItem(key);
+      }
+      return result;
+    });
+    console.log('  localStorage keys:', Object.keys(storage).join(', '));
+    
+    // Extract token (prefer response, fall back to localStorage)
+    let token = null;
+    if (resp && resp.json && resp.json.data) {
+      token = resp.json.data.token || resp.json.data.jwt || resp.json.data.accessToken;
+    }
+    const arToken = storage.ar_token;
+    if (arToken) token = arToken;
+    
+    if (token) {
+      console.log('  JWT refreshed successfully!');
+      
+      let exp = 0;
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          exp = payload.exp || (Math.floor(Date.now() / 1000) + 1800);
+        } else {
+          exp = Math.floor(Date.now() / 1000) + 1800;
+        }
+      } catch (e) {
+        exp = Math.floor(Date.now() / 1000) + 1800;
+      }
+      
+      state.jwt = token;
+      state.jwtExpiry = exp;
+      state.lastLoginError = null;
+      
+      // Save to file
+      const loginResponse = {
+        data: {
+          token: token,
+          expiresIn: exp,
+          webSocketUrl: storage.ar_ws_url || resp.json?.data?.webSocketUrl,
+          webSocketChannels: storage.ar_ws_channels || JSON.stringify(resp.json?.data?.webSocketChannels)
+        },
+        code: 0,
+        msg: 'Succeed'
+      };
+      fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(loginResponse, null, 2));
+      
+      return true;
+    } else {
+      state.lastLoginError = 'No token found after login. Response code/msg: ' + 
+        (resp?.json?.code || 'unknown') + ' / ' + (resp?.json?.msg || 'no msg');
+      console.log('  No token found after login');
+      console.log('  Response:', JSON.stringify(resp?.json).substring(0, 500));
+      return false;
+    }
+  } catch (e) {
+    state.lastLoginError = 'Login error: ' + e.message;
+    console.error('  Login error:', e.message);
+    return false;
+  } finally {
+    await browser.close();
+  }
 }
 
 // === Discord Webhook ===

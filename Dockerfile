@@ -40,12 +40,7 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     libxkbcommon0 \
     libdrm2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
