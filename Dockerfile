@@ -1,6 +1,6 @@
 FROM node:18-slim
 
-# Install dependencies for puppeteer (uses its own Chromium)
+# Install Chromium dependencies (Debian packages)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -46,7 +46,7 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install app dependencies (puppeteer downloads its own Chromium)
+# Install app dependencies (puppeteer will download its own Chromium)
 RUN npm install
 
 # Copy app source
