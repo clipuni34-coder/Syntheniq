@@ -574,9 +574,12 @@ async function executeRaceBets(color, issueNumber) {
             
             console.log(`✅ Bet ${i+1}: SUCCESS`);
           } else if (json.code === 1 && json.msg === 'Game is being maintained') {
-            // Maintenance
+            console.log(`⚠️ Bet ${i+1}: MAINTENANCE - ${json.msg || 'Maintenance mode'}`);
           } else if (json.code === 4) {
             state.stats.losses++;
+            console.log(`❌ Bet ${i+1}: LOSS - ${json.msg || 'Bet lost'}`);
+          } else {
+            console.log(`⚠️ Bet ${i+1}: Unexpected response - code=${json.code}, msg=${json.msg || 'N/A'}, body=${JSON.stringify(json).substring(0, 200)}`);
           }
         } catch (e) {
           console.error('Bet parse error:', e.message);
