@@ -42,6 +42,7 @@ const state = {
   monitoring: false,
   lastResult: null,
   lastRaceWindow: null,
+  lastLoginError: null,
   stats: {
     roundsDetected: 0,
     raceWindowsFound: 0,
@@ -152,78 +153,109 @@ function refreshJwt() {
       await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
       await page.setViewport({ width: 414, height: 896, isMobile: true });
       
-      try {
-        await page.goto('https://fb999.com/#/login', { waitUntil: 'networkidle2', timeout: 30000 });
-        await new Promise(r => setTimeout(r, 2000));
-        
-        // Fill credentials
-        await page.waitForSelector('input[name="userNumber"]', { timeout: 10000 });
-        await page.type('input[name="userNumber"]', FB999_PHONE, { delay: 50 });
-        
-        const pwdField = await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
-        await pwdField.type(FB999_PASSWORD, { delay: 50 });
-        
-        // Click login
-        await page.waitForFunction(() => {
-          const btns = Array.from(document.querySelectorAll('button'));
-          return btns.some(b => b.textContent.trim().toLowerCase().includes('login'));
-        }, { timeout: 15000 });
-        
-        await page.evaluate(() => {
-          const btn = Array.from(document.querySelectorAll('button'))
-            .find(b => b.textContent.trim().toLowerCase().includes('login'));
-          if (btn) btn.click();
-        });
-        
-        // Wait for response
-        await page.waitForTimeout(5000);
-        
-        // Check localStorage for token
-        const storage = await page.evaluate(() => {
-          const result = {};
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key) result[key] = localStorage.getItem(key);
-          }
-          return result;
-        });
-        
-        const token = storage.ar_token || storage.token;
-        if (token) {
-          console.log('JWT refreshed successfully!');
-          
-          // Get token expiry from JWT
-          const parts = token.split('.');
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          const exp = payload.exp || (Math.floor(Date.now() / 1000) + 1800);
-          
-          state.jwt = token;
-          state.jwtExpiry = exp;
-          
-          // Save to file
-          const loginResponse = {
-            data: {
-              token: token,
-              expiresIn: exp,
-              webSocketUrl: storage.ar_ws_url,
-              webSocketChannels: storage.ar_ws_channels
-            },
-            code: 0,
-            msg: 'Succeed'
-          };
-          fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(loginResponse, null, 2));
-          
-          resolve(true);
-        } else {
-          console.log('No token found in localStorage');
-          resolve(false);
-        }
-      } catch (e) {
-        console.error('Login error:', e.message);
-        resolve(false);
-      } finally {
-        await browser.close();
-      }
+     try {
+         await page.goto('https://fb999.com/#/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+         await new Promise(r => setTimeout(r, 3000));
+         
+         // Fill credentials - try multiple selectors
+         try {
+           await page.waitForSelector('input[name="userNumber"]', { timeout: 10000 });
+           await page.type('input[name="userNumber"]', FB999_PHONE, { delay: 100 });
+         } catch (e) {
+           state.lastLoginError = 'Could not find userNumber input: ' + e.message;
+           console.error('userNumber input:', e.message);
+           // Take screenshot for debugging
+           await page.screenshot({ path: '/tmp/login_error.png' }).catch(() => {});
+           resolve(false);
+           return;
+         }
+         
+         try {
+           const pwdField = await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
+           await pwdField.type(FB999_PASSWORD, { delay: 100 });
+         } catch (e) {
+           state.lastLoginError = 'Could not find password input: ' + e.message;
+           console.error('Password input:', e.message);
+           await page.screenshot({ path: '/tmp/login_error2.png' }).catch(() => {});
+           resolve(false);
+           return;
+         }
+         
+         // Click login
+         try {
+           await page.waitForFunction(() => {
+             const btns = Array.from(document.querySelectorAll('button'));
+             return btns.some(b => b.textContent.trim().toLowerCase().includes('login'));
+           }, { timeout: 15000 });
+           
+           await page.evaluate(() => {
+             const btn = Array.from(document.querySelectorAll('button'))
+               .find(b => b.textContent.trim().toLowerCase().includes('login'));
+             if (btn) btn.click();
+           });
+         } catch (e) {
+           state.lastLoginError = 'Could not find login button: ' + e.message;
+           console.error('Login button:', e.message);
+           resolve(false);
+           return;
+         }
+         
+         // Wait for response
+         await page.waitForTimeout(8000);
+         
+         // Check localStorage for token
+         const storage = await page.evaluate(() => {
+           const result = {};
+           for (let i = 0; i < localStorage.length; i++) {
+             const key = localStorage.key(i);
+             if (key) result[key] = localStorage.getItem(key);
+           }
+           return result;
+         });
+         
+         console.log('LocalStorage keys after login:', Object.keys(storage));
+         
+         const token = storage.ar_token || storage.token;
+         if (token) {
+           console.log('JWT refreshed successfully!');
+           
+           // Get token expiry from JWT
+           const parts = token.split('.');
+           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+           const exp = payload.exp || (Math.floor(Date.now() / 1000) + 1800);
+           
+           state.jwt = token;
+           state.jwtExpiry = exp;
+           state.lastLoginError = null;
+           
+           // Save to file
+           const loginResponse = {
+             data: {
+               token: token,
+               expiresIn: exp,
+               webSocketUrl: storage.ar_ws_url,
+               webSocketChannels: storage.ar_ws_channels
+             },
+             code: 0,
+             msg: 'Succeed'
+           };
+           fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(loginResponse, null, 2));
+           
+           resolve(true);
+         } else {
+           state.lastLoginError = 'No token found in localStorage. Storage keys: ' + Object.keys(storage).join(', ');
+           console.log('No token found in localStorage');
+           console.log('Storage:', JSON.stringify(storage).substring(0, 500));
+           await page.screenshot({ path: '/tmp/no_token.png' }).catch(() => {});
+           resolve(false);
+         }
+       } catch (e) {
+         state.lastLoginError = 'Login error: ' + e.message;
+         console.error('Login error:', e.message);
+         resolve(false);
+       } finally {
+         await browser.close();
+       }
     }).catch(err => {
       console.error('Browser launch error:', err.message);
       resolve(false);
@@ -436,6 +468,7 @@ app.get('/api/status', (req, res) => {
     monitoring: state.monitoring,
     lastResult: state.lastResult,
     lastRaceWindow: state.lastRaceWindow,
+    lastLoginError: state.lastLoginError,
     stats: state.stats,
     race_wins: state.raceWins
   });
