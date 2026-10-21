@@ -1,6 +1,6 @@
 FROM node:18-slim
 
-# Install Chromium with all dependencies + additional libraries for puppeteer
+# Install Chromium dependencies and system packages
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -40,7 +40,6 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     libxkbcommon0 \
     libdrm2 \
-    chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -49,11 +48,11 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install app dependencies
+# Install app dependencies (skip Chromium download, use system later if needed)
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN npm install
-
-# Verify Chromium is available
-RUN ls -la /root/.cache/puppeteer/ 2>/dev/null || echo "No puppeteer cache found"
+# Download Chrome for puppeteer as fallback
+RUN npx puppeteer browsers install chrome 2>/dev/null || echo "Puppeteer Chrome download failed, will use system Chromium"
 
 # Copy app source
 COPY . .
