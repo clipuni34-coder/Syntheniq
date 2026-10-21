@@ -78,19 +78,24 @@ function signParams(params) {
 // === HTTP Request Helpers ===
 function httpRequest(hostname, path, method = 'GET', body = null, headers = {}) {
   return new Promise((resolve, reject) => {
+    const allHeaders = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+      'Referer': 'https://fb999.com/',
+      'Origin': 'https://fb999.com',
+      'ar-origin': 'https://fb999.com',
+      ...headers
+    };
+    if (body) {
+      allHeaders['Content-Length'] = Buffer.byteLength(body);
+    }
+    
     const req = https.request({
       hostname,
       path,
       method,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
-        'Referer': 'https://fb999.com/',
-        'Origin': 'https://fb999.com',
-        'ar-origin': 'https://fb999.com',
-        ...headers
-      }
+      headers: allHeaders
     }, (res) => {
       let data = '';
       res.on('data', c => data += c);
@@ -98,7 +103,6 @@ function httpRequest(hostname, path, method = 'GET', body = null, headers = {}) 
     });
     req.on('error', reject);
     if (body) {
-      headers['Content-Length'] = Buffer.byteLength(body);
       req.write(body);
     }
     req.end();
@@ -511,12 +515,12 @@ async function startRaceMonitoring() {
             `**Race Window Detected!**\n` +
             `Result: ${resultNum} (${resultColor})\n` +
             `Time to close: ${Math.round(msToClose/1000)}s\n` +
-            `Placing rapid bets...`,
+            `Placing bets on next round (${config.next?.issueNumber})...`,
             'success'
           );
           
-          // Place race bets
-          await executeRaceBets(resultColor, list[0].issueNumber);
+          // Place race bets on the NEXT open round (not the already-closed one)
+          await executeRaceBets(resultColor, config.next?.issueNumber || config.current.issueNumber);
           
           raceWindow = false;
         }
