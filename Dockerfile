@@ -1,14 +1,20 @@
 FROM node:18-alpine
 
-# Install Chromium for Puppeteer
+# Install Chromium and required shared libraries for headless puppeteer
+# Chromium comes from Alpine's package repo; puppeteer will use PUPPETEER_EXECUTABLE_PATH
 RUN apk add --no-cache \
     chromium \
     nss \
     freetype \
-    freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    fontconfig \
+    libstdc++
+
+# Tell puppeteer to use the system Chromium (skip its own download)
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Create app directory
 WORKDIR /app
@@ -16,11 +22,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install app dependencies
+# Install app dependencies (puppeteer won't re-download Chromium due to env var)
 RUN npm ci --omit=dev
-
-# Install puppeteer with bundled chromium
-RUN npm install puppeteer
 
 # Copy app source
 COPY . .

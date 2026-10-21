@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: wingo-racer
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: FB999_PHONE
+        value: "2349121493739"
+      - key: FB999_PASSWORD
+        value: "Drewziwugod6"
+      - key: NODE_ENV
+        value: "production"
+      - key: PORT
+        value: "3000"
+    healthCheck:
+      path: /health
+      interval: 30

@@ -1,0 +1,51 @@
+name: WinGo Racer — Persistent Runner
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every hour
+    - cron: '0 * * * *'
+
+jobs:
+  run-wingo:
+    runs-on: ubuntu-22.04
+    container:
+      image: node:18-alpine
+      options: --privileged
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      
+      - name: Install Chromium
+        run: |
+          apk add --no-cache \
+            chromium \
+            nss \
+            freetype \
+            freetype-dev \
+            harfbuzz \
+            ca-certificates \
+            ttf-freefont
+      
+      - name: Install npm deps
+        run: npm install
+      
+      - name: Refresh JWT
+        run: node scripts/refreshJwt.js
+        env:
+          FB999_PHONE: ${{ secrets.FB999_PHONE }}
+          FB999_PASSWORD: ${{ secrets.FB999_PASSWORD }}
+      
+      - name: Copy JWT to persistent location
+        run: |
+          # Save JWT to a file that persists between scheduled runs
+          cp /tmp/fb999_login_response.json ./jwt_cache.json
+      
+      - name: Deploy app via Docker on Fly.io
+        if: github.event_name == 'workflow_dispatch'
+        uses: superfly/flyctl-actions/deploy@main
+        with:
+          args: "--app wingo-racer"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

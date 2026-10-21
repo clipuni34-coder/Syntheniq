@@ -126,12 +126,16 @@ function refreshJwt() {
     
     puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.CHROME_BIN || undefined,
+      executablePath: process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      ignoreHTTPSErrors: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--window-size=414,896'
+        '--window-size=414,896',
+        '--ignore-certificate-errors',
+        '--disable-blink-features=AutomationDetected,IsolateOrigins,IOSurfaceSharing',
+        '--disable-features=EncryptedClientHello'
       ]
     }).then(async (browser) => {
       const page = await browser.newPage();
@@ -286,7 +290,7 @@ async function startRaceMonitoring() {
         const resultColor = numberToColor(resultNum);
         
         state.lastResult = {
-          issueNumber: detected.issueNumber,
+          issueNumber: list[0].issueNumber,
           number: resultNum,
           color: resultColor,
           timestamp: new Date().toISOString()
@@ -441,14 +445,20 @@ app.post('/api/start-monitoring', (req, res) => {
 async function init() {
   console.log('=== WinGo_30S Race Condition App ===\n');
   
-  // Initial JWT refresh
-  console.log('Loading JWT...');
-  state.jwt = loadJwt();
-  
-  if (!state.jwt) {
-    console.log('No valid JWT, refreshing...');
-    await refreshJwt();
-  }
+   // Initial JWT refresh
+   console.log('Loading JWT...');
+   state.jwt = loadJwt();
+   
+   if (!state.jwt) {
+     console.log('No valid JWT, refreshing...');
+     await refreshJwt();
+   } else {
+     // Set jwtExpiry from the loaded token's expiry
+     try {
+       const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
+       state.jwtExpiry = loginData.data?.expiresIn || 0;
+     } catch (e) {}
+   }
   
   // Start server
   app.listen(PORT, () => {
