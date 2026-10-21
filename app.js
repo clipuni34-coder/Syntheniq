@@ -169,10 +169,18 @@ async function refreshJwt() {
       executablePath = '/usr/bin/chromium';
     } else if (fs.existsSync('/usr/bin/chromium-browser')) {
       executablePath = '/usr/bin/chromium-browser';
+    } else if (fs.existsSync('/usr/bin/google-chrome')) {
+      executablePath = '/usr/bin/google-chrome';
+    } else if (fs.existsSync('/usr/bin/google-chrome-stable')) {
+      executablePath = '/usr/bin/google-chrome-stable';
     } else {
-      executablePath = puppeteer.executablePath();
+      // Try puppeteer's bundled Chromium
+      const defaultPath = puppeteer.executablePath();
+      if (defaultPath && fs.existsSync(defaultPath)) {
+        executablePath = defaultPath;
+      }
     }
-    console.log('  Chromium executable:', executablePath);
+    console.log('  Chromium executable:', executablePath || 'default (puppeteer bundled)');
   } catch (e) {
     console.log('  Using default Chromium');
   }
@@ -246,17 +254,26 @@ async function refreshJwt() {
     }
     
     // Click the visible "Log in" button (must be visible + match regex)
+    // The fb999.com SPA may render the button with text like "Log in", "Login", "Sign In", or "Đăng nhập"
     try {
-      console.log('  Waiting for "Log in" button...');
+      console.log('  Waiting for login button...');
       await page.waitForFunction(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         return btns.some(b => {
           const r = b.getBoundingClientRect();
           const s = window.getComputedStyle(b);
+          const text = (b.textContent || '').trim().toLowerCase();
           return r.width > 0 && r.height > 0
             && s.visibility !== 'hidden' && s.display !== 'none'
             && b.offsetParent !== null
-            && /log\s*in/i.test(b.textContent || '');
+            && (
+              /log\s*in/i.test(text) ||
+              text.includes('login') ||
+              text.includes('sign in') ||
+              text.includes('đăng nhập') ||
+              text.includes('đăng') ||
+              text.includes('submit')
+            );
         });
       }, { timeout: 15000 });
       
@@ -269,21 +286,39 @@ async function refreshJwt() {
             && s.visibility !== 'hidden' && s.display !== 'none'
             && b.offsetParent !== null;
           if (!visible) continue;
-          if (/log\s*in/i.test(b.textContent || '')) {
+          const text = (b.textContent || '').trim().toLowerCase();
+          if (
+            /log\s*in/i.test(text) ||
+            text.includes('login') ||
+            text.includes('sign in') ||
+            text.includes('đăng nhập') ||
+            text.includes('đăng') ||
+            text.includes('submit')
+          ) {
             b.click();
             return { found: true, text: b.textContent.trim(), className: b.className };
           }
+        }
+        // Fallback: click any visible button that's a submit type
+        const submitBtn = Array.from(document.querySelectorAll('button[type="submit"]')).find(b => {
+          const r = b.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && b.offsetParent !== null;
+        });
+        if (submitBtn) {
+          submitBtn.click();
+          return { found: true, text: submitBtn.textContent.trim(), className: submitBtn.className, fallback: true };
         }
         return { found: false };
       });
       console.log('  Submit button clicked:', JSON.stringify(clicked));
       
       if (!clicked.found) {
-        state.lastLoginError = 'No visible "Log in" button found';
+        state.lastLoginError = 'No visible login button found. Page may have anti-bot protection.';
+        await page.screenshot({ path: '/tmp/login_no_btn.png' }).catch(() => {});
         return false;
       }
     } catch (e) {
-      state.lastLoginError = 'Could not find visible login button: ' + e.message;
+      state.lastLoginError = 'Could not find login button: ' + e.message;
       console.error('  Login button error:', e.message);
       await page.screenshot({ path: '/tmp/login_error_btn.png' }).catch(() => {});
       return false;
