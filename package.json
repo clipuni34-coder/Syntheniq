@@ -2,7 +2,7 @@
   "name": "wingo-race-condition",
   "version": "1.0.0",
   "private": true,
-  "description": "WinGo_30S Race Condition Exploiter - Docker deployment",
+  "description": "WinGo_30S Race Condition Exploiter - Fly.io deployment",
   "scripts": {
     "start": "node app.js",
     "dev": "node app.js",

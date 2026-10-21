@@ -9,7 +9,7 @@
  * - Web dashboard for monitoring
  * - Background monitoring service
  * 
- * Deployment: Koyeb / Docker / Any Node.js host
+ * Deployment: Fly.io / Docker / Any Node.js host
  * 
  * Health check: /health
  * Status: /api/status
@@ -23,6 +23,7 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
+const path = require('path');
 
 // === Configuration ===
 const PORT = process.env.PORT || 3000;
@@ -32,6 +33,7 @@ const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL || null;
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 // === State Management ===
 const state = {
@@ -606,16 +608,7 @@ async function executeRaceBets(color, issueNumber) {
 
 // === Express Routes ===
 app.get('/', (req, res) => {
-  const host = req.get('host') || 'syntheniq.onrender.com';
-  const protocol = req.protocol || 'https';
-  res.json({
-    name: 'WinGo_30S Race Condition App',
-    status: 'running',
-    health: `${protocol}://${host}/health`,
-    api: `${protocol}://${host}/api/status`,
-    events: `${protocol}://${host}/api/events`,
-    timestamp: new Date().toISOString()
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/health', (req, res) => {
