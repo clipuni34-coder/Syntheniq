@@ -593,12 +593,14 @@ async function executeRaceBets(color, issueNumber) {
 
 // === Express Routes ===
 app.get('/', (req, res) => {
+  const host = req.get('host') || 'syntheniq.onrender.com';
+  const protocol = req.protocol || 'https';
   res.json({
     name: 'WinGo_30S Race Condition App',
     status: 'running',
-    health: 'https://wingo-racer.onrender.com/health',
-    api: 'https://wingo-racer.onrender.com/api/status',
-    events: 'https://wingo-racer.onrender.com/api/events',
+    health: `${protocol}://${host}/health`,
+    api: `${protocol}://${host}/api/status`,
+    events: `${protocol}://${host}/api/events`,
     timestamp: new Date().toISOString()
   });
 });
