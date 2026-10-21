@@ -38,6 +38,14 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     wget \
     xdg-utils \
+    libxkbcommon0 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -47,7 +55,6 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install app dependencies
-# PUPPETEER_SKIP_DOWNLOAD is not set, so puppeteer will download Chromium
 RUN npm install
 
 # Verify Chromium is available
