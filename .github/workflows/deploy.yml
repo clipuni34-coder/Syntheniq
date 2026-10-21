@@ -1,0 +1,32 @@
+name: Deploy to Koyeb
+
+on:
+  push:
+    branches: [kilo/firm-dune-ur8]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Start WinGo monitor
+      run: |
+        # Auto-refresh JWT
+        node scripts/refreshJwt.js
+      env:
+        FB999_PHONE: ${{ secrets.FB999_PHONE }}
+        FB999_PASSWORD: ${{ secrets.FB999_PASSWORD }}
+        
+    - name: Run race detection
+      run: |
+        timeout 300 node app.js
+      env:
+        FB999_PHONE: ${{ secrets.FB999_PHONE }}
+        FB999_PASSWORD: ${{ secrets.FB999_PASSWORD }}

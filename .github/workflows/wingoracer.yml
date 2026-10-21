@@ -1,0 +1,82 @@
+name: WinGo Race Monitor
+
+on:
+  schedule:
+    - cron: '* * * * *'  # Every minute
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Check betting status
+      run: |
+        node -e "
+        const https = require('https');
+        const fs = require('fs');
+        const crypto = require('crypto');
+        
+        // Get JWT token
+        let jwt = process.env.FB999_JWT;
+        if (!jwt && fs.existsSync('/tmp/fb999_login_response.json')) {
+          jwt = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8')).data?.token;
+        }
+        
+        if (!jwt) {
+          console.log('JWT not available');
+          process.exit(1);
+        }
+        
+        // Test bet
+        const betBody = JSON.stringify({TypeId:30, lottery:'WinGo', gameCode:'WinGo_30S', issueNumber:'test', BetCount:1, Amount:1, SelectType:'Red'});
+        
+        const req = https.request({
+          hostname: 'fb999api.com',
+          path: '/api/webapi/GameBetting',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + jwt
+          }
+        }, (res) => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            const json = JSON.parse(data);
+            console.log('Bet status:', json.code, json.msg);
+            if (json.code !== 1 && json.code !== 4) { // Not maintenance
+              console.log('BETTING AVAILABLE');
+              fs.writeFileSync('/tmp/betting_available.txt', 'true');
+            }
+          });
+        });
+        req.write(betBody);
+        req.end();
+        "
+        
+    - name: Trigger race exploit (when betting available)
+      if: success() && hashFiles('/tmp/betting_available.txt') != ''
+      run: |
+        echo "::set-output name=bet_opened::true"
+        
+    - name: Run race exploit on demand
+      if: github.event_name == 'workflow_dispatch' || success()
+      run: |
+        timeout 100 node scripts/winGoRaceFinal.js || true
+      env:
+        FB999_PHONE: ${{ secrets.FB999_PHONE }}
+        FB999_PASSWORD: ${{ secrets.FB999_PASSWORD }}
+        FB999_JWT: ${{ secrets.FB999_JWT }}

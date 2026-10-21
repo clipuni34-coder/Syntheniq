@@ -1,0 +1,30 @@
+web:
+  ports:
+    - "3000"
+  environment:
+    NODE_ENV: "production"
+    PORT: "3000"
+    FB999_PHONE: "${FB999_PHONE}"
+    FB999_PASSWORD: "${FB999_PASSWORD}"
+    DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL}"
+  health_check:
+    path: "/health"
+    interval: "60s"
+    timeout: "10s"
+  scaling:
+    min_instances: 1
+    max_instances: 1
+
+worker:
+  command: "node app.js"
+  environment:
+    NODE_ENV: "production"
+    FB999_PHONE: "${FB999_PHONE}"
+    FB999_PASSWORD: "${FB999_PASSWORD}"
+    DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL}"
+  health_check:
+    path: "/health"
+    interval: "60s"
+  scaling:
+    min_instances: 1
+    max_instances: 1
