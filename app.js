@@ -446,6 +446,16 @@ function numberToColor(n) {
   return 'Green';
 }
 
+// FIXED: Map API color to bet type correctly
+// API returns "red", "green", "red,violet" etc. — map to our SelectType format
+function mapColorToBetType(apiColor) {
+  const color = String(apiColor || '').toLowerCase().trim();
+  if (color.includes('violet')) return 'Violet';
+  if (color.includes('green')) return 'Green';
+  if (color.includes('red')) return 'Red';
+  return numberToColor(0); // fallback
+}
+
 function classify(n) {
   n = parseInt(n);
   if (n === 0) return 'violet';
@@ -485,9 +495,11 @@ async function startRaceMonitoring() {
       const list = JSON.parse(histRes.body).data?.list || [];
       
       if (list.length > 0 && list[0].issueNumber !== lastDetectedIssue) {
-        lastDetectedIssue = list[0].issueNumber;
-        const resultNum = list[0].number;
-        const resultColor = numberToColor(resultNum);
+         lastDetectedIssue = list[0].issueNumber;
+         const resultNum = list[0].number;
+         // FIXED: Use the API's actual color, not computed color (which was inverted)
+         const apiColor = list[0].color; // Format: "red", "green", "red,violet" etc.
+         const resultColor = mapColorToBetType(apiColor); // Map to Red/Green/Violet
         
         state.lastResult = {
           issueNumber: list[0].issueNumber,
