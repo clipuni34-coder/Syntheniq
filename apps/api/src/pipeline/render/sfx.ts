@@ -27,6 +27,7 @@ export interface SfxResult {
 }
 
 const SFX_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), 'sfx_cache');
+const SFX_ASSETS_DIR = path.resolve(import.meta.dirname, '../../assets/sfx');
 
 const SFX_DURATIONS: Record<SfxType, number> = {
   whoosh: 2.0,
@@ -40,6 +41,50 @@ const SFX_DURATIONS: Record<SfxType, number> = {
   cheer: 2.0,
   swish: 0.8,
 };
+
+/** Map SFX types to pre-made CC0 asset files.
+ * Uses the downloaded pop.wav, whoosh.wav, bell.wav from remotion.media.
+ */
+const SFX_ASSET_FILES: Partial<Record<SfxType, string>> = {
+  'whoosh': 'whoosh.wav',
+  'pop': 'pop.wav',
+  'click': 'pop.wav',
+  'tone': 'bell.wav',
+  'impact': 'pop.wav',
+  'swish': 'whoosh.wav',
+};
+
+/** Try to use a pre-made CC0 SFX asset instead of generating one. */
+async function useSfxAsset(
+  sfxType: SfxType,
+  intensity: number,
+  cacheDir: string,
+  id: string
+): Promise<string | null> {
+  const assetName = SFX_ASSET_FILES[sfxType];
+  if (!assetName) return null;
+
+  const assetPath = path.join(SFX_ASSETS_DIR, assetName);
+  if (!fs.existsSync(assetPath)) return null;
+
+  // Copy the asset to cache with intensity-based volume adjustment
+  const outFile = path.join(cacheDir, `${sfxType}-${id}.wav`);
+  const vol = Math.max(0.1, Math.min(1, intensity));
+  
+  try {
+    await run('ffmpeg', [
+      '-hide_banner', '-y',
+      '-i', assetPath,
+      '-af', `volume=${vol},loudnorm=I=-14:TP=-1:LRA=7`,
+      '-ar', '48000',
+      '-ac', '1',
+      outFile,
+    ]);
+    return outFile;
+  } catch {
+    return null;
+  }
+}
 
 async function generateSfxFile(
   sfxType: SfxType,
@@ -57,37 +102,104 @@ async function generateSfxFile(
 
   switch (sfxType) {
     case 'whoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity}`;
+      // Rich whoosh: noise sweep with frequency glissando, EQ shaping
+      filter = `anoisesrc=d=${dur}:c=pink,` +
+               `asetrate=48000*${0.7 + intensity * 0.6},` +
+               `atempo=${0.8 + intensity * 0.4},` +
+               `aeval='sin(3.14159*t/${dur}):x=0',` +
+               `aloop=loop=-1:size=1600,asetnsamples=4096,` +
+               `equalizer=f=150:w=200:g=${3 + intensity * 5},` +
+               `equalizer=f=3000:w=800:g=${2 + intensity * 3},` +
+               `loudnorm=I=-14:TP=-1:LRA=7,` +
+               `volume=${0.7 + intensity * 0.3}`;
       break;
     case 'swoosh':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity},afade=t=out:st=${dur - 0.3}:d=0.3`;
+      // Quick swoosh with high-frequency emphasis and fade
+      filter = `anoisesrc=d=${dur}:c=pink,` +
+               `asetrate=48000*${0.9 + intensity * 0.4},` +
+               `atempo=${1.0 + intensity * 0.5},` +
+               `highpass=f=500,` +
+               `equalizer=f=1200:w=300:g=${4 + intensity * 4},` +
+               `equalizer=f=4000:w=1000:g=${2 + intensity * 2},` +
+               `afade=t=out:st=${dur - 0.2}:d=0.2,` +
+               `loudnorm=I=-14:TP=-1:LRA=7,` +
+               `volume=${0.6 + intensity * 0.4}`;
       break;
     case 'pop':
-      filter = `sine=frequency=${freq * 2}:duration=0.05,volume=${intensity}`;
+      // Sharp click-pop: filtered noise burst with high-frequency emphasis
+      filter = `anoisesrc=d=${dur}:c=white,` +
+               `highpass=f=200,lowpass=f=8000,` +
+               `asetrate=44100*${1.0 + intensity * 0.5},atempo=${0.8},` +
+               `equalizer=f=${600 + intensity * 600}:w=150:g=10,` +
+               `afade=t=out:st=0:d=${dur},` +
+               `volume=${intensity * 0.8}`;
       break;
     case 'click':
-      filter = `anoisesrc=d=0.05:c=white,volume=${intensity}`;
+      filter = `anoisesrc=d=0.03:c=white,` +
+               `highpass=f=500,lowpass=f=12000,` +
+               `equalizer=f=1500:w=300:g=6,` +
+               `volume=${intensity * 0.7}`;
       break;
     case 'hum':
-      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity * 0.5},afade=t=in:st=0:d=0.2,afade=t=out:st=${dur - 0.2}:d=0.2`;
+      filter = `sine=frequency=${freq}:duration=${dur},` +
+               `equalizer=f=60:w=80:g=${-6 + intensity * 3},` +  // reduce low hum
+               `equalizer=f=220:w=100:g=${3 + intensity * 2},` +  // boost fundamental
+               `equalizer=f=880:w=200:g=${2 + intensity * 1},` +  // boost 4th harmonic
+               `afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3,` +
+               `volume=${intensity * 0.3}`;
       break;
     case 'tone':
-      filter = `sine=frequency=${freq}:duration=${dur},volume=${intensity}`;
+      filter = `sine=frequency=${freq}:duration=${dur},` +
+               `equalizer=f=${freq}:w=${freq * 0.3}:g=${5 + intensity * 3},` +
+               `equalizer=f=${freq * 2}:w=${freq * 0.3}:g=3,` +
+               `volume=${intensity * 0.5}`;
       break;
     case 'impact':
-      filter = `anoisesrc=d=0.1:c=white,volume=${intensity}`;
+      // Punchy impact: filtered noise burst with low-end punch
+      {
+        const impactFreq = 80 + intensity * 150;
+        filter = `anoisesrc=d=0.08:c=brown,` +
+                 `lowpass=f=800,` +
+                 `equalizer=f=60:w=60:g=${6 + intensity * 2},` +
+                 `equalizer=f=150:w=100:g=${4 + intensity * 2},` +
+                 `equalizer=f=300:w=200:g=${2 + intensity * 1},` +
+                 `asetrate=44100*${0.95 + intensity * 0.1},` +
+                 `loudnorm=I=-12:TP=-1,` +
+                 `volume=${0.5 + intensity * 0.5}`;
+      }
       break;
     case 'footsteps':
-      filter = `anoisesrc=d=${dur}:c=brown:volume=${intensity * 0.4},asetrate=48000*1.15`;
+      filter = `anoisesrc=d=${dur}:c=brown,` +
+               `asetrate=48000*1.2,atempo=0.8,` +
+               `equalizer=f=60:w=60:g=6,` +
+               `equalizer=f=120:w=80:g=4,` +
+               `equalizer=f=250:w=100:g=2,` +
+               `lowpass=f=200,` +
+               `volume=${intensity * 0.4}`;
       break;
     case 'cheer':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.5},vibrato=f=5:d=0.5,afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3`;
+      filter = `anoisesrc=d=${dur}:c=pink,` +
+               `sine=frequency=440:duration=${dur}:volume=${intensity * 0.3},` +
+               `sine=frequency=555:duration=${dur}:volume=${intensity * 0.2},` +
+               `sine=frequency=660:duration=${dur}:volume=${intensity * 0.2},` +
+               `asetrate=44100*${0.9 + intensity * 0.2},` +
+               `equalizer=f=1000:w=400:g=3,` +
+               `equalizer=f=3000:w=1000:g=2,` +
+               `afade=t=in:st=0:d=0.3,afade=t=out:st=${dur - 0.3}:d=0.3,` +
+               `vibrato=f=5:d=0.5,` +
+               `volume=${intensity * 0.5}`;
       break;
     case 'swish':
-      filter = `anoisesrc=d=${dur}:c=pink,volume=${intensity * 0.4},asetrate=48000*1.3,afade=t=out:st=${dur - 0.2}:d=0.2`;
+      filter = `anoisesrc=d=${dur}:c=pink,` +
+               `asetrate=48000*1.3,atempo=1.1,` +
+               `highpass=f=300,` +
+               `equalizer=f=800:w=200:g=${3 + intensity * 2},` +
+               `equalizer=f=2000:w=500:g=${2 + intensity * 1},` +
+               `afade=t=out:st=${dur - 0.15}:d=0.15,` +
+               `volume=${intensity * 0.4}`;
       break;
     default:
-      filter = `sine=frequency=440:duration=${dur},volume=${intensity}`;
+      filter = `sine=frequency=${freq}:duration=${dur},equalizer=f=${freq}:w=${freq * 0.3}:g=5,volume=${intensity}`;
   }
 
   await run('ffmpeg', [
@@ -143,7 +255,8 @@ export async function applySoundEffects(
     effects.push(sfx);
 
     try {
-      const audioFile = await generateSfxFile(sfxType, intensity, cacheDir, id);
+      const audioFile = await useSfxAsset(sfxType, intensity, cacheDir, id) 
+        ?? await generateSfxFile(sfxType, intensity, cacheDir, id);
       audioFiles.push(audioFile);
       notes.push(`Placed ${sfxType} at ${start.toFixed(2)}s`);
       placedCount++;
@@ -158,7 +271,8 @@ export async function applySoundEffects(
     const sfx: SoundEffect = { id, type: sfxType, start: 0, duration: SFX_DURATIONS[sfxType] };
     effects.push(sfx);
     try {
-      const audioFile = await generateSfxFile(sfxType, 0.5, cacheDir, id);
+      const audioFile = await useSfxAsset(sfxType, 0.5, cacheDir, id)
+        ?? await generateSfxFile(sfxType, 0.5, cacheDir, id);
       audioFiles.push(audioFile);
       placedCount++;
     } catch (e) {

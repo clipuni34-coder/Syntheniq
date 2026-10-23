@@ -3,11 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Segment, Word, EnergyPoint, Span } from '../../types.js';
-import type { AnalysisData } from '../../types.js';
+import type { AnalysisData, BRollCue } from '../../types.js';
 import { analyzeEmotion } from '../editorial/emotion.js';
 import { scoreRetentionArchitecture, type RetentionBeat } from '../editorial/retention.js';
 import { planMotion } from '../editorial/motion.js';
 import { buildEditDecision, type EditDecision } from '../editorial/plan.js';
+import { generateKeywordBRollCues, isSyntheticBroll } from './broll.js';
 import { buildCaptionEvents, buildKineticCaptions, writeASS, type KineticCaptionEvent } from './captions.js';
 import { validateCaptions, repairCaptions, checkCaptionReadability, type CaptionQCResult } from './caption-qc.js';
 import { buildTreatment, buildRenderCommand, type TreatmentOptions, type TreatmentResult } from './treatments.js';
@@ -17,6 +18,8 @@ import { run, ffprobe } from '../../lib/ffmpeg.js';
 import type { MediaInfo } from '../editorial/motion.js';
 import { verifyExport } from '../editorial/qc.js';
 import { buildSafeRenderFilters } from '../editorial/qc.js';
+import { ensureDir } from '../../lib/paths.js';
+const BROLL_ASSETS_DIR = path.resolve(import.meta.dirname, '../../assets/broll');
 
 function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
@@ -76,6 +79,7 @@ export interface BuildTreatmentInput {
   };
   analysis: AnalysisData;
   outDir: string;
+  broll?: boolean;
 }
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -119,6 +123,172 @@ function computeSilences(speechActive: Span[] | undefined, start: number, end: n
     silences.push({ start: active[active.length - 1].end, end });
   }
   return mergeSilences(silences);
+}
+
+/** Load committed B-roll cues from cues.json. */
+function loadBRollCues(): BRollCue[] {
+  try {
+    const cuesPath = path.join(BROLL_ASSETS_DIR, 'cues.json');
+    if (!fs.existsSync(cuesPath)) return [];
+    const data = JSON.parse(fs.readFileSync(cuesPath, 'utf8'));
+    return data.cues || [];
+  } catch {
+    return [];
+  }
+}
+
+/** Result of resolving B-roll source URLs to local files. */
+interface BRollResolveResult {
+  cues: BRollCue[];
+  notes: string[];
+}
+
+/** Resolve B-roll source URLs to local files (download if needed,
+ * generate synthetic fallback for remote URLs, keep local as-is).
+ */
+async function resolveBRollSources(
+  cues: BRollCue[],
+  assetsDir: string,
+  outDir: string
+): Promise<BRollResolveResult> {
+  const notes: string[] = [];
+  const cacheDir = path.join(outDir, 'broll_cache');
+  ensureDir(cacheDir);
+
+  const resolved: BRollCue[] = [];
+  for (const cue of cues) {
+    const source = cue.source;
+    if (isSyntheticBroll(source)) {
+      resolved.push(cue);
+      continue;
+    }
+    if (source.startsWith('http')) {
+      // Remote URL — download or use a local static asset
+      const ext = path.extname(source).split('?')[0] || '.mp4';
+      const filename = `${cue.id}${ext}`;
+      const localPath = path.join(cacheDir, filename);
+      if (!fs.existsSync(localPath)) {
+        try {
+          const res = await fetch(source);
+          if (res.ok) {
+            const buffer = await res.arrayBuffer();
+            fs.writeFileSync(localPath, Buffer.from(buffer));
+            notes.push(`Downloaded B-roll: ${cue.id}`);
+          } else {
+            notes.push(`Failed to download B-roll: ${cue.id} (status ${res.status})`);
+          }
+        } catch (err) {
+          notes.push(`Error downloading B-roll: ${cue.id} — using synthetic fallback`);
+          resolved.push({ ...cue, source: `synthetic:broll:0x2196F3` });
+          continue;
+        }
+      }
+      resolved.push({ ...cue, source: localPath });
+    } else if (fs.existsSync(source)) {
+      resolved.push(cue);
+    } else {
+      const localPath = path.join(assetsDir, source);
+      if (fs.existsSync(localPath)) {
+        resolved.push({ ...cue, source: localPath });
+      } else {
+        notes.push(`Missing B-roll asset: ${source} — using synthetic fallback`);
+        resolved.push({ ...cue, source: `synthetic:broll:0x2196F3` });
+      }
+    }
+  }
+  return { cues: resolved, notes };
+}
+
+/** Generate a synthetic B-roll clip using ffmpeg color source. */
+async function generateSyntheticBRoll(
+  cue: BRollCue,
+  outDir: string,
+  index: number
+): Promise<string> {
+  ensureDir(outDir);
+  const outPath = path.join(outDir, `synth-broll-${index}.mp4`);
+
+  // Parse color from synthetic source: "synthetic:broll:0x2196F3"
+  const parts = cue.source.split(':');
+  const colorCode = parts[parts.length - 1] || '0x2196F3';
+  const color = colorCode.startsWith('0x') ? colorCode.replace('0x', '') : colorCode;
+
+  const width = 720;
+  const height = 1280;
+  const duration = Math.max(1, cue.outDuration);
+
+  // Generate a simple color-based synthetic B-roll with subtle zoom
+  await run('ffmpeg', [
+    '-f', 'lavfi', '-i', `color=c=${color}:s=${width}x${height}:d=${duration}`,
+    '-vf', `scale=${width}:${height},zoompan=z='if(gte(zoom,1.2),1.2,zoom+0.002)':d=${width}/10:s=${width}x${height}`,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-t', String(duration),
+    '-y',
+    outPath,
+  ]);
+
+  return outPath;
+}
+
+/** Build B-roll cues based on the `broll` option and transcript keywords. */
+async function getBRollCues(
+  input: BuildTreatmentInput,
+  allWords: Word[],
+  clipStart: number,
+  clipEnd: number,
+  outDir: string,
+  warnings: string[]
+): Promise<BRollCue[]> {
+  if (!input.broll) return [];
+
+  // Generate content-aware B-roll cues based on transcript keywords
+  const apiKey = process.env.PIXABAY_API_KEY || '';
+  const keywordCues = await generateKeywordBRollCues(allWords, clipStart, clipEnd, apiKey);
+
+  // Also load any committed cues from cues.json
+  const committedCues = loadBRollCues();
+  const clipDuration = clipEnd - clipStart;
+
+  // Adjust committed cues to clip-relative timing
+  const adjustedCommitted = committedCues
+    .filter((cue) => cue.outStart < clipDuration || cue.outStart + cue.outDuration > 0)
+    .map((cue): BRollCue => {
+      const start = Math.max(0, Math.min(clipDuration, cue.outStart));
+      const end = Math.min(clipDuration, start + cue.outDuration);
+      const outDuration = Math.max(0.5, end - start);
+      return { ...cue, outStart: start, outDuration };
+    })
+    .filter((cue) => cue.outDuration > 0.5);
+
+  // Merge keyword-based cues with committed cues (keyword cues take priority)
+  let brollCues: BRollCue[] = [...keywordCues, ...adjustedCommitted];
+  warnings.push(`[broll] Content-aware: ${keywordCues.length} keyword cues, ${adjustedCommitted.length} committed cues`);
+
+  // Resolve B-roll sources (download URLs or generate synthetic)
+  const resolved = await resolveBRollSources(brollCues, BROLL_ASSETS_DIR, outDir);
+  brollCues = resolved.cues;
+  for (const n of resolved.notes) warnings.push(`[broll] ${n}`);
+
+  // Handle synthetic fallbacks - generate actual files for synthetic: sources
+  const realBroll = brollCues.filter((c) => !isSyntheticBroll(c.source));
+  const syntheticBroll = brollCues.filter((c) => isSyntheticBroll(c.source));
+
+  if (syntheticBroll.length > 0) {
+    warnings.push(`[broll] ${syntheticBroll.length} synthetic B-roll generated (keyword-based fallback)`);
+    const syntheticCues: BRollCue[] = [];
+    for (let i = 0; i < brollCues.length; i++) {
+      const cue = brollCues[i];
+      if (isSyntheticBroll(cue.source)) {
+        const synthFile = await generateSyntheticBRoll(cue, outDir, i);
+        syntheticCues.push({ ...cue, source: synthFile });
+      }
+    }
+    brollCues = [...realBroll, ...syntheticCues];
+  }
+
+  warnings.push(`[broll] Final: ${brollCues.length} cutaway cues (${realBroll.length} downloaded, ${brollCues.length - realBroll.length} synthetic)`);
+  return brollCues;
 }
 
 export async function buildVisualTreatment(
@@ -255,14 +425,19 @@ export async function buildVisualTreatment(
     fs.writeFileSync(kineticAssFile, content, 'utf8');
   } else {
     fs.rmSync(kineticAssFile, { force: true });
-  }
+   }
 
    const treatment = await buildTreatment(decision, {
-    ...options,
-    assFile,
-    kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
-    outDir: input.outDir,
-    faces: input.analysis.structure?.faceTrack || [],
+     ...options,
+     assFile,
+     kineticAssFile: fs.existsSync(kineticAssFile) ? kineticAssFile : null,
+     outDir: input.outDir,
+     faces: (input.analysis.structure?.faceTrack || []).map((f) => ({
+       ...f,
+       start: f.start - clipStart,
+       end: f.end - clipStart,
+     })),
+     brollCues: await getBRollCues(input, allWords, clipStart, clipEnd, outDir, warnings),
     visualEffects: input.analysis.structure?.stats?.hasFace ? {
       faceHighlight: 0.2,
       backgroundBlur: 0,
