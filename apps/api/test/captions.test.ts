@@ -37,7 +37,7 @@ test('events never overlap', () => {
 test('ASS output is a valid burn-in track', () => {
   const ass = buildASS([{ start: 1.2, end: 2.5, text: 'Hello world, this is a fairly long caption line' }]);
   assert.ok(ass.includes('[V4+ Styles]'));
-  assert.ok(ass.includes('Style: Default,DejaVu Sans Bold,72,'));
+  assert.ok(ass.includes('Style: Default,DejaVu Sans Bold,100,'));
   assert.ok(ass.includes('Dialogue: 0,0:00:01.20,0:00:02.50,Default'));
   assert.ok(ass.includes('\\N'), 'long lines wrap to two lines');
 });

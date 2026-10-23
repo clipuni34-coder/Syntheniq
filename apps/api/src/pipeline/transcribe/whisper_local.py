@@ -8,6 +8,7 @@ All logging goes to stderr so stdout stays machine-readable.
 """
 import argparse
 import json
+import re
 import sys
 
 
@@ -59,11 +60,16 @@ def main() -> int:
     for seg in segments_iter:
         words = []
         for w in seg.words or []:
+            word_text = w.word
+            # Filter out pure numeric words that are likely Whisper artifacts
+            # (ambient sounds, silence, or unclear speech misread as numbers)
+            if re.match(r'^[0-9]+([.][0-9]+)?$', word_text.strip()):
+                continue
             words.append(
                 {
                     "start": round(w.start + args.offset, 3),
                     "end": round(w.end + args.offset, 3),
-                    "word": w.word,
+                    "word": word_text,
                 }
             )
         segments.append(

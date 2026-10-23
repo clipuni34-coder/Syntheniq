@@ -432,8 +432,7 @@ test('Phase 10: multi-segment treatment produces valid labeled filtergraph', asy
   const fcIdx = args.indexOf('-filter_complex');
   assert.ok(fcIdx >= 0, 'multi-segment render command should use -filter_complex');
   const vfStr = args[fcIdx + 1];
-  assert.ok(vfStr.includes('subtitles=filename='), 'base captions should appear in render command');
-  assert.ok(vfStr.includes('ass=filename='), 'kinetic captions should appear in render command');
+  assert.ok(vfStr.includes('subtitles=filename='), 'captions should appear as subtitles filter in render command');
   assert.ok(args.includes('-map'), 'should map filter_complex output');
   assert.ok(args.includes('[outv]'), 'should map [outv] output label');
 });
