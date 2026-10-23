@@ -394,6 +394,18 @@ export async function buildVisualTreatment(
   const baseEvents = buildCaptionEvents(allWords, clipStart, clipEnd);
   writeASS(assFile, baseEvents, { title: clipTitle });
 
+  // Auto-adapt caption style based on video content (brightness + content type)
+  // Falls back to 'hormozi' if analysis fails or file is missing
+  let activeStyleId = 'hormozi';
+  try {
+    const { autoAdaptCaptionStyle } = await import('./captions.js');
+    const videoInput = input.input;
+    const adaptation = await autoAdaptCaptionStyle(videoInput);
+    activeStyleId = adaptation.styleId;
+  } catch {
+    // Continue with default style
+  }
+
   const kineticEvents = buildKineticCaptions(
     allWords,
     clipStart,
@@ -421,7 +433,7 @@ export async function buildVisualTreatment(
 
   if (eventsForAss.length > 0) {
     const { buildKineticASS } = await import('./captions.js');
-    const content = buildKineticASS(eventsForAss, { title: clipTitle });
+    const content = buildKineticASS(eventsForAss, { title: clipTitle, styleId: activeStyleId });
     fs.writeFileSync(kineticAssFile, content, 'utf8');
   } else {
     fs.rmSync(kineticAssFile, { force: true });

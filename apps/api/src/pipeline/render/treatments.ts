@@ -448,28 +448,6 @@ export function buildRenderCommand(
     // Complex filtergraph with intermediate labels — must use -filter_complex
     const inputs: string[] = ['-hide_banner', '-y', '-ss', String(start), '-t', String(duration), '-i', input];
     
-    // Add caption filters to the last video filter chain
-    if (captionFilters.length > 0) {
-      if (allVideoFilters.length === 0) {
-        // No existing video filters, create a new chain starting from main input
-        allVideoFilters.push(`[0:v]${captionFilters.join(',')},setsar=1,format=yuv420p`);
-      } else if (allVideoFilters[0].startsWith('[0:v]')) {
-        // Chain already starts with [0:v], append captions to first filter
-        allVideoFilters[0] = allVideoFilters[0].replace(/(\[0:v\])/, `[0:v]${captionFilters.join(',')},`);
-      } else {
-        const lastIdx = allVideoFilters.length - 1;
-        if (lastIdx >= 0 && allVideoFilters[lastIdx].includes('[') && allVideoFilters[lastIdx].includes(']')) {
-          // Already has input label, append captions
-          allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
-        } else {
-          // No input label: just append captions (the [0:v] input label is handled
-          // by the singleChain builder on line ~462 when hasLabels is false,
-          // or is already present at the head of the labeled chain).
-          allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
-        }
-      }
-    }
-    
     // When using filter_complex, ensure video filters have proper input/output labels.
     // When SFX are present without multi-segment labels, join all video filters into a
     // single chain and force yuv420p to pass QC (input may be yuvj420p).
@@ -477,6 +455,11 @@ export function buildRenderCommand(
     // consume it: with B-roll it ends at [base] (overlays then emit [outv]);
     // otherwise it ends at [outv] directly.
     const outLabel = hasBroll ? 'base' : 'outv';
+    
+    // --- Video filter chain assembly ---
+    // Correct ordering: scale/crop → face effects → motion → BASE label
+    // Then captions are appended AFTER the base chain so they overlay face effects
+    // and motion, while B-roll overlays (which consume [base]) are added separately.
     let videoChains: string[];
     if (!hasLabels && allVideoFilters.length > 0 && !allVideoFilters[0].includes('[0:v]')) {
       // Join all filters into a single chain with [0:v] input and [outLabel] output
@@ -489,6 +472,19 @@ export function buildRenderCommand(
       if (!videoChains[lastVidIdx].includes(`[${outLabel}]`)) {
         videoChains[lastVidIdx] = `${videoChains[lastVidIdx]},setsar=1,setparams=range=tv,format=yuv420p[${outLabel}]`;
       }
+    }
+
+    // --- Caption filter insertion (after base chain is labeled) ---
+    // Captions must overlay face effects, smart crop, and motion effects.
+    // They are inserted before the output label so they sit between the base video
+    // and B-roll overlays (which consume [base] and emit [outv]).
+    if (captionFilters.length > 0) {
+      const lastVidIdx = videoChains.length - 1;
+      // Insert caption filters before the output label on the last chain
+      videoChains[lastVidIdx] = videoChains[lastVidIdx].replace(
+        new RegExp(`\\[${outLabel}\\]$`),
+        `,${captionFilters.join(',')}[${outLabel}]`
+      );
     }
     
     // Add SFX input files (indices 1..N after the main input 0)

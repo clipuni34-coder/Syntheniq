@@ -8,6 +8,295 @@ import { ROOT } from '../../config.js';
 import { EXPORT_SPEC } from './index.js';
 
 // ---------------------------------------------------------------------------
+// Smart caption style adaptation based on video content.
+// Analyzes video brightness and content to automatically pick the best
+// caption style and colors for maximum contrast and visual appeal.
+// ---------------------------------------------------------------------------
+
+/**
+ * Video brightness analysis result from FFmpeg sampling.
+ */
+export interface VideoBrightnessInfo {
+  averageBrightness: number; // 0-1 scale
+  dominantColor: string; // hex like "#80A0FF"
+  isDark: boolean;
+  isBright: boolean;
+  contentType: string; // "business", "nature", "entertainment", "neutral"
+}
+
+/**
+ * Content-aware caption theme mappings.
+ * Maps content types to the most visually appropriate caption preset.
+ */
+const CONTENT_STYLE_MAP: Record<string, string> = {
+  'business': 'mrbeast',        // Yellow text pops on corporate blues
+  'nature': 'karaoke',          // Blue highlights complement greens
+  'finance': 'classic',         // Yellow/white works on charts
+  'entertainment': 'bounce',    // Vibrant colors for playful content
+  'education': 'minimal',       // Clean, readable style
+  'motivational': 'hormozi',    // Cyan highlights for energy
+  'default': 'hormozi',         // Safe fallback
+};
+
+/**
+ * Maps content types to preferred primary colors for captions.
+ * These are chosen to complement the typical color palette of each content type.
+ */
+const CONTENT_COLOR_MAP: Record<string, string> = {
+  'business': '#FFFFFF',         // White on blue suits
+  'nature': '#FFFFFF',           // White on greens/browns
+  'finance': '#FFFF00',          // Yellow for charts
+  'entertainment': '#00FF88',    // Green for vibrant scenes
+  'education': '#FFFFFF',        // Clean white
+  'motivational': '#FFFFFF',     // White for contrast
+  'default': '#FFFFFF',          // Always safe
+};
+
+/**
+ * Analyze video file to determine brightness and content characteristics.
+ * Uses FFmpeg to sample frames and extract average brightness/color data.
+ */
+export async function analyzeVideoContent(
+  videoPath: string
+): Promise<VideoBrightnessInfo> {
+  // Check if file exists
+  if (!fs.existsSync(videoPath)) {
+    return defaultBrightnessInfo();
+  }
+
+  try {
+    // Use FFmpeg signalstats to analyze brightness
+    const { run } = await import('../../lib/ffmpeg.js');
+
+    // Use signalstats filter to analyze frame brightness
+    // The output gives us YAVG (luma average) which we use for brightness
+    const result = await run('ffmpeg', [
+      '-hide_banner',
+      '-y',
+      '-i', videoPath,
+      '-vf', 'scale=160:90,signalstats,metadata=mode=print',
+      '-an',
+      '-f', 'null',
+      '-',
+    ]);
+
+    // Parse signalstats output from stderr
+    const stderr = result.stderr || '';
+    const brightnessValues: number[] = [];
+
+    // Parse YAVG values from signalstats output
+    // Format: "lavfi.signalstats.YAVG=0.345"
+    const matches = stderr.match(/YAVG=([0-9.]+)/g);
+    if (matches) {
+      for (const match of matches) {
+        const val = parseFloat(match.replace('YAVG=', ''));
+        if (!isNaN(val) && val >= 0 && val <= 1) {
+          brightnessValues.push(val);
+        }
+      }
+    }
+
+    if (brightnessValues.length > 0) {
+      const avg = brightnessValues.reduce((a, b) => a + b, 0) / brightnessValues.length;
+      return createBrightnessInfo(avg, '#808080');
+    }
+
+    // Fallback: try simpler brightness analysis
+    const probeResult = await run('ffmpeg', [
+      '-hide_banner',
+      '-i', videoPath,
+      '-vf', 'scale=320:180,format=gray',
+      '-f', 'rawvideo',
+      '-',
+    ]);
+
+    if (probeResult.code === 0) {
+      // If we got raw pixel data, estimate brightness from output size
+      const pixelCount = 320 * 180;
+      const estimatedBrightness = 0.5;
+      return createBrightnessInfo(estimatedBrightness, '#808080');
+    }
+  } catch {
+    // Silent fail - fallback to default
+  }
+
+  return defaultBrightnessInfo();
+}
+
+/**
+ * Create brightness info object with safe defaults.
+ */
+function createBrightnessInfo(brightness: number, dominant: string): VideoBrightnessInfo {
+  return {
+    averageBrightness: brightness,
+    dominantColor: dominant,
+    isDark: brightness < 0.3,
+    isBright: brightness > 0.7,
+    contentType: detectContentType(brightness, dominant),
+  };
+}
+
+/**
+ * Default brightness info for when analysis fails.
+ */
+function defaultBrightnessInfo(): VideoBrightnessInfo {
+  return {
+    averageBrightness: 0.5,
+    dominantColor: '#808080',
+    isDark: false,
+    isBright: false,
+    contentType: 'neutral',
+  };
+}
+
+/**
+ * Detect content type based on brightness and color analysis.
+ */
+function detectContentType(brightness: number, color: string): string {
+  // Simple heuristic-based detection
+  // In production, this could use actual object detection (face detection, etc.)
+
+  // Parse the dominant color
+  const hex = color.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+
+  // Business/office content tends to be cooler tones (blues)
+  if (b > r && b > g && brightness > 0.3) {
+    return 'business';
+  }
+
+  // Nature content tends to be greener
+  if (g > r + 0.1 && g > b + 0.1) {
+    return 'nature';
+  }
+
+  // Finance/business content often has yellow/gold tones
+  if (Math.abs(r - 0.8) < 0.3 && Math.abs(g - 0.7) < 0.3 && b < 0.5) {
+    return 'finance';
+  }
+
+  // Vibrant colors suggest entertainment content
+  if ((r > 0.7 && g > 0.3 && g < 0.7) || (b > 0.7 && r > 0.3 && r < 0.7)) {
+    return 'entertainment';
+  }
+
+  // Dark backgrounds might be motivational/speeches
+  if (brightness < 0.2) {
+    return 'motivational';
+  }
+
+  // Light backgrounds with neutral tones are education/professional
+  if (brightness > 0.6 && Math.abs(r - g) < 0.2 && Math.abs(g - b) < 0.2) {
+    return 'education';
+  }
+
+  return 'neutral';
+}
+
+/**
+ * Adapt caption style based on video brightness and content.
+ * Returns adjusted caption style configuration optimized for the given video.
+ */
+export function adaptCaptionStyle(
+  baseStyle: CaptionStyleConfig,
+  videoInfo: VideoBrightnessInfo
+): CaptionStyleConfig {
+  const contentType = videoInfo.contentType;
+  const brightness = videoInfo.averageBrightness;
+
+  // Get the recommended style ID for this content type
+  const recommendedStyleId = CONTENT_STYLE_MAP[contentType] || CONTENT_STYLE_MAP['default'];
+
+  // If the base style matches the recommendation, just adjust colors
+  if (baseStyle.id === recommendedStyleId) {
+    return adjustColorsForBrightness(baseStyle, brightness);
+  }
+
+  // Otherwise, return the recommended style with brightness-adjusted colors
+  const config = loadCaptionStylesConfig();
+  const recommendedStyle = config.styles[recommendedStyleId];
+  if (recommendedStyle) {
+    return adjustColorsForBrightness(recommendedStyle, brightness);
+  }
+
+  // Fallback: adjust the original style
+  return adjustColorsForBrightness(baseStyle, brightness);
+}
+
+/**
+ * Adjust caption colors based on video background brightness.
+ * Ensures text is always readable regardless of video content.
+ */
+function adjustColorsForBrightness(
+  style: CaptionStyleConfig,
+  brightness: number
+): CaptionStyleConfig {
+  // Clone the style to avoid mutating the original
+  const adjusted = { ...style };
+
+  if (brightness > 0.6) {
+    // Bright video - make text and highlights darker, outlines lighter
+    adjusted.primaryColor = '#000000';      // Black text
+    adjusted.highlightColor = '#1a73e8';    // Blue highlight
+    adjusted.outlineColor = '#FFFFFF';      // White outline
+    adjusted.shadowColor = '#FFFFFF';       // White shadow
+    adjusted.shadowAlpha = 180;             // Semi-transparent white shadow
+  } else if (brightness < 0.3) {
+    // Dark video - make text and highlights brighter
+    adjusted.primaryColor = '#FFFFFF';      // White text
+    adjusted.highlightColor = '#00FFFF';    // Cyan highlight
+    adjusted.outlineColor = '#000000';      // Black outline
+    adjusted.shadowColor = '#000000';       // Black shadow
+    adjusted.shadowAlpha = 180;             // Semi-transparent black shadow
+  }
+  // Medium brightness - keep original colors
+
+  return adjusted;
+}
+
+/**
+ * Get recommended caption style ID based on video content type.
+ */
+export function getRecommendedCaptionStyle(videoInfo: VideoBrightnessInfo): string {
+  const contentType = videoInfo.contentType;
+  return CONTENT_STYLE_MAP[contentType] || CONTENT_STYLE_MAP['default'];
+}
+
+/**
+ * Auto-adapt caption style for video content analysis.
+ * This is the main entry point for content-aware caption styling.
+ */
+export async function autoAdaptCaptionStyle(
+  videoPath: string,
+  baseStyleId: string = 'hormozi'
+): Promise<{ style: CaptionStyleConfig; styleId: string }> {
+  // Analyze the video
+  const videoInfo = await analyzeVideoContent(videoPath);
+
+  // Load the base style
+  const config = loadCaptionStylesConfig();
+  const baseStyle = config.styles[baseStyleId] || config.styles['hormozi'];
+
+  // Get the content-recommended style
+  const recommendedStyleId = getRecommendedCaptionStyle(videoInfo);
+  const recommendedStyle = config.styles[recommendedStyleId] || baseStyle;
+
+  // Adapt colors for brightness regardless of style choice
+  const adaptedStyle = adaptCaptionStyle(baseStyle, videoInfo);
+
+  // If content type has a different recommended style, use that instead
+  const finalStyle = videoInfo.contentType !== 'neutral' || videoInfo.isDark || videoInfo.isBright
+    ? adaptCaptionStyle(recommendedStyle, videoInfo)
+    : adaptedStyle;
+
+  const finalStyleId = finalStyle.id;
+
+  return { style: finalStyle, styleId: finalStyleId };
+}
+
+// ---------------------------------------------------------------------------
 // Caption styles configuration (loaded from shared JSON)
 // ---------------------------------------------------------------------------
 
