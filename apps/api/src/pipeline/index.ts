@@ -495,7 +495,7 @@ async function mirrorBestEffort(localPath: string, key: string, notes: string[])
   }
 }
 
-export async function runExport(projectId: string, clipId: string, jobId: string): Promise<unknown> {
+export async function runExport(projectId: string, clipId: string, jobId: string, opts: { broll?: boolean } = {}): Promise<unknown> {
   try {
     const project = await db.getProject(projectId);
     if (!project) throw Object.assign(new Error('Project not found'), { statusCode: 404 });
@@ -520,6 +520,7 @@ export async function runExport(projectId: string, clipId: string, jobId: string
       },
       analysis,
       outDir: dir,
+      broll: opts.broll === true,
     };
 
     const treatmentResult = await renderWithTreatment(treatmentInput, { assFile }, (frac: number) => {
@@ -599,14 +600,14 @@ export function jobHandlers(): Record<string, (job: JobPublic) => Promise<unknow
       await runAnalysis(meta.projectId, job.id, { maxClips });
     },
     export: async (job: JobPublic) => {
-      const meta = (job.meta || {}) as { projectId?: unknown; clipId?: unknown };
+      const meta = (job.meta || {}) as { projectId?: unknown; clipId?: unknown; broll?: unknown };
       if (typeof meta.projectId !== 'string' || !meta.projectId) {
         throw new Error('export job is missing meta.projectId');
       }
       if (typeof meta.clipId !== 'string' || !meta.clipId) {
         throw new Error('export job is missing meta.clipId');
       }
-      await runExport(meta.projectId, meta.clipId, job.id);
+      await runExport(meta.projectId, meta.clipId, job.id, { broll: meta.broll === true });
     },
   };
 }

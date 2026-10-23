@@ -228,7 +228,7 @@ function applyCues(
   editEnd: number
 ): EditSegment[] {
   for (const cue of motionPlan.cues) {
-    const segIdx = segments.findIndex((s) => cue.t >= s.start + editStart && cue.t <= s.end + editStart);
+    const segIdx = segments.findIndex((s) => cue.t >= s.start && cue.t <= s.end);
     if (segIdx >= 0) {
       const seg = segments[segIdx];
       if (seg.cues.length < 3) {

@@ -13,6 +13,8 @@ import { getStorage, isR2, keys } from '../storage/index.js';
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/projects/:id/clips/:clipId/export', async (req, reply) => {
     const { id, clipId } = req.params as { id: string; clipId: string };
+    const query = req.query as { broll?: unknown };
+    const brollRequested = query.broll === true || query.broll === 'true' || query.broll === '1';
     const project = await db.getProject(id);
     if (!project) return reply.code(404).send({ error: 'Project not found' });
     const analysis = await readAnalysis(project.id);
@@ -30,7 +32,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
         haveFile = false;
       }
     }
-    if (clip.exported && haveFile) {
+    if (!brollRequested && clip.exported && haveFile) {
       const job = await jobs.createJob('export', `Export ${clip.title}`, {
         projectId: project.id,
         clipId: clip.id,
@@ -58,9 +60,10 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
       await db.updateProject(project.id, { activeJob: null });
     }
 
-    const job = await jobs.createJob('export', `Export ${clip.title}`, {
+    const job = await jobs.createJob('export', `Export ${clip.title}${brollRequested ? ' (+B-roll)' : ''}`, {
       projectId: project.id,
       clipId: clip.id,
+      broll: brollRequested,
     });
     await db.updateProject(project.id, { activeJob: { id: job.id, type: 'export', clipId: clip.id } });
     reply.code(202);

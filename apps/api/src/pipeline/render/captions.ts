@@ -1,8 +1,124 @@
 // Syntheniq — caption engine: word timestamps → phrase events → ASS track.
 // Phase 10 extension: kinetic captions with word-level animation effects.
 import fs from 'node:fs';
+import path from 'node:path';
 import type { Word } from '../../types.js';
 import type { MotionCue } from '../editorial/motion.js';
+import { ROOT } from '../../config.js';
+import { EXPORT_SPEC } from './index.js';
+
+// ---------------------------------------------------------------------------
+// Caption styles configuration (loaded from shared JSON)
+// ---------------------------------------------------------------------------
+
+export interface CaptionStyleConfig {
+  id: string;
+  name: string;
+  description: string;
+  fontName: string;
+  fontNameFallback: string;
+  fontSize: number;
+  primaryColor: string;
+  highlightColor: string;
+  outlineColor: string;
+  shadowColor: string;
+  shadowAlpha: number;
+  outlineSize: number;
+  shadowDepth: number;
+  bold: boolean;
+  italic: boolean;
+  letterSpacing: number;
+  wordSpacing: number;
+  animationType: 'highlight' | 'karaoke' | 'bounce' | 'scale';
+  previewText: string;
+  bestFor: string;
+}
+
+export interface OutputFormatConfig {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  aspectRatio: string;
+  description: string;
+}
+
+export interface CaptionStylesConfig {
+  $schema?: string;
+  title?: string;
+  description?: string;
+  styles: Record<string, CaptionStyleConfig>;
+  outputFormats: Record<string, OutputFormatConfig>;
+  captionPosition: {
+    min: number;
+    max: number;
+    default: number;
+    description: string;
+  };
+  preview?: {
+    phoneWidth: number;
+    description: string;
+  };
+}
+
+const CAPTIONS_CONFIG_PATH = path.join(ROOT, 'assets', 'captions', 'caption-styles.config.json');
+
+let _captionStylesConfig: CaptionStylesConfig | null = null;
+
+function loadCaptionStylesConfig(): CaptionStylesConfig {
+  if (_captionStylesConfig) return _captionStylesConfig;
+  const raw = fs.readFileSync(CAPTIONS_CONFIG_PATH, 'utf8');
+  _captionStylesConfig = JSON.parse(raw) as CaptionStylesConfig;
+  return _captionStylesConfig;
+}
+
+export function getCaptionStyle(styleId: string): CaptionStyleConfig {
+  const config = loadCaptionStylesConfig();
+  const style = config.styles[styleId];
+  if (!style) {
+    const available = Object.keys(config.styles).join(', ');
+    throw new Error(`Invalid caption style '${styleId}'. Available: ${available}`);
+  }
+  return style;
+}
+
+export function getCaptionStyles(): CaptionStyleConfig[] {
+  const config = loadCaptionStylesConfig();
+  return Object.values(config.styles);
+}
+
+export function getDefaultStyleId(): string {
+  const config = loadCaptionStylesConfig();
+  return config.captionPosition.default !== undefined ? 'hormozi' : 'hormozi';
+}
+
+export function getDefaultCaptionPosition(): number {
+  const config = loadCaptionStylesConfig();
+  return config.captionPosition.default;
+}
+
+// ---------------------------------------------------------------------------
+// Color conversion (hex #RRGGBB → ASS &HAABBGGRR)
+// ---------------------------------------------------------------------------
+
+function hexToAss(hex: string, alpha: number = 0): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = Math.max(0, Math.min(255, Math.round(alpha)));
+  return (
+    '&H' +
+    a.toString(16).toUpperCase().padStart(2, '0') +
+    b.toString(16).toUpperCase().padStart(2, '0') +
+    g.toString(16).toUpperCase().padStart(2, '0') +
+    r.toString(16).toUpperCase().padStart(2, '0')
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Caption event interfaces
+// ---------------------------------------------------------------------------
 
 export interface CaptionEvent {
   start: number;
@@ -11,13 +127,10 @@ export interface CaptionEvent {
 }
 
 export type KineticWordEffect =
-  | 'typewriter'
-  | 'pop'
-  | 'slide_left'
-  | 'slide_right'
-  | 'bounce'
   | 'highlight'
-  | 'color_swap'
+  | 'karaoke'
+  | 'bounce'
+  | 'scale'
   | 'none';
 
 export interface KineticWord {
@@ -35,6 +148,10 @@ export interface KineticCaptionEvent {
   words: KineticWord[];
   style: string;
 }
+
+// ---------------------------------------------------------------------------
+// Word-level processing
+// ---------------------------------------------------------------------------
 
 export function toKineticWords(
   words: Word[] | undefined | null,
@@ -66,25 +183,25 @@ export function toKineticWords(
     const dur = w.end - w.start;
 
     if (isPunctuation) {
-      w.effect = 'pop';
+      w.effect = 'bounce';
       w.emphasis = 1;
       w.layer = 5;
     } else if (dur > 0.15) {
       const intensity = Math.min(1, dur / avgCueDur);
       if (intensity > 0.7) {
-        w.effect = i % 2 === 0 ? 'bounce' : 'slide_left';
+        w.effect = i % 2 === 0 ? 'bounce' : 'highlight';
         w.emphasis = intensity;
         w.layer = Math.floor(intensity * 3);
       } else if (intensity > 0.5) {
-        w.effect = 'color_swap';
+        w.effect = 'highlight';
         w.emphasis = intensity;
         w.layer = 3;
       } else if (intensity > 0.4) {
-        w.effect = 'highlight';
+        w.effect = 'scale';
         w.emphasis = intensity;
         w.layer = 2;
       } else {
-        w.effect = 'typewriter';
+        w.effect = 'karaoke';
         w.emphasis = intensity;
         w.layer = 1;
       }
@@ -93,7 +210,7 @@ export function toKineticWords(
     if (motionCues) {
       for (const cue of motionCues) {
         if (w.start <= cue.t - clipStart && w.end >= cue.t - clipStart && cue.kind === 'emphasis') {
-          w.effect = 'pop';
+          w.effect = 'bounce';
           w.emphasis = Math.min(1, (cue.intensity || 0.7) + 0.3);
           w.layer = 10;
         }
@@ -104,13 +221,17 @@ export function toKineticWords(
   return ks;
 }
 
+// ---------------------------------------------------------------------------
+// Kinetic caption event building
+// ---------------------------------------------------------------------------
+
 export function buildKineticCaptions(
   words: Word[] | undefined | null,
   clipStart: number,
   clipEnd: number,
   motionCues?: MotionCue[],
   {
-    maxWords = 4,
+    maxWords = 2,
     maxDur = 1.6,
   }: { maxWords?: number; maxDur?: number } = {}
 ): KineticCaptionEvent[] {
@@ -127,13 +248,15 @@ export function buildKineticCaptions(
     end = Math.max(end, start + 0.35);
 
     const maxLayer = Math.max(...group.map((w) => w.layer), 0);
-    let style = 'neutral';
+    let style = 'hormozi';
     const hasBounce = group.some((w) => w.effect === 'bounce');
-    const hasSlide = group.some((w) => w.effect === 'slide_left');
-    const hasPop = group.some((w) => w.effect === 'pop');
-    if (hasBounce) style = 'emphatic';
-    else if (hasSlide) style = 'dynamic';
-    else if (hasPop) style = 'punchy';
+    const hasKaraoke = group.some((w) => w.effect === 'karaoke');
+    const hasScale = group.some((w) => w.effect === 'scale');
+    const hasHighlight = group.some((w) => w.effect === 'highlight');
+    if (hasBounce) style = 'bounce';
+    else if (hasKaraoke) style = 'karaoke';
+    else if (hasScale) style = 'minimal';
+    else if (hasHighlight) style = 'mrbeast';
 
     events.push({
       start,
@@ -162,29 +285,149 @@ export function buildKineticCaptions(
   return events;
 }
 
-function effectParams(effect: KineticWordEffect, emphasis: number): string {
+// ---------------------------------------------------------------------------
+// ASS style line generation (from config)
+// ---------------------------------------------------------------------------
+
+function buildAssStyleLine(style: CaptionStyleConfig, marginV: number, marginL: number = 60, marginR: number = 140): string {
+  const primary = hexToAss(style.primaryColor, 0);
+  const secondary = hexToAss(style.highlightColor, 0);
+  const outline = hexToAss(style.outlineColor, 0);
+  const shadow = hexToAss(style.shadowColor, style.shadowAlpha);
+  const bold = style.bold ? -1 : 0;
+  const italic = style.italic ? -1 : 0;
+  return (
+    `Style: ${style.name},${style.fontName},${style.fontSize},${primary},${secondary},${outline},${shadow},` +
+    `${bold},${italic},0,0,100,100,0.5,0,1,${style.outlineSize},${style.shadowDepth},2,${marginL},${marginR},${marginV},1`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline animation tags for word-by-word highlighting
+// ---------------------------------------------------------------------------
+
+function wordAnimationTags(
+  effect: KineticWordEffect,
+  emphasis: number,
+  style: CaptionStyleConfig,
+  wordDuration: number
+): string {
   const e = Math.min(1, Math.max(0, emphasis));
+  const hlColor = hexToAss(style.highlightColor, 0);
+
   switch (effect) {
-    case 'typewriter':
-      return 'fs=' + Math.round(30 + e * 10) + ':alpha=<\\h,1000\\,1>';
-    case 'pop':
-      return 'fs=' + Math.round(50 + e * 40) + ':alpha=<0\\,1\\,,1>0:blur=0\\,5\\,0';
-    case 'slide_left':
-      return 'fs=40:x=' + (Math.round(-20 - e * 30)) + '->' + (Math.round(10 + e * 10));
-    case 'slide_right':
-      return 'fs=40:x=' + (Math.round(10 + e * 10)) + '->' + (Math.round(-20 - e * 30));
-    case 'bounce':
-      return 'fs=' + Math.round(40 + e * 20) + ':y=<0\\,20\\,0\\,10\\,0';
+    case 'karaoke': {
+      const duration = Math.max(1, Math.round(wordDuration * 100));
+      return `\\kf${duration}\\c${hlColor}`;
+    }
+    case 'scale': {
+      const scale = Math.round(100 + e * 10);
+      return `\\fscx${scale}\\fscy${scale}\\c${hlColor}`;
+    }
+    case 'bounce': {
+      const scale = Math.round(100 + e * 20);
+      return `\\t(0,50,\\fscx${scale}\\fscy${scale})\\t(50,100,\\fscx100\\fscy100)\\c${hlColor}`;
+    }
     case 'highlight':
-      return 'fs=40:boxcolor=yellow@' + (e * 0.3).toFixed(2);
-    case 'color_swap':
-      return 'fs=40:boxcolor=green@' + (e * 0.2).toFixed(2);
-    default:
-      return 'fs=36';
+    default: {
+      return `\\c${hlColor}`;
+    }
   }
 }
 
-export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Syntheniq captions' }: { title?: string } = {}): string {
+// ---------------------------------------------------------------------------
+// Multi-line support
+// ---------------------------------------------------------------------------
+
+function findLineBreakIndex(words: KineticWord[]): number {
+  if (words.length <= 2) return -1;
+  const totalLen = words.reduce((sum, w) => sum + w.text.length + 1, 0) - 1;
+  if (totalLen <= 25) return -1;
+  let best = 1;
+  let bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const lenA = words.slice(0, i).reduce((sum, w) => sum + w.text.length + 1, 0) - 1;
+    const lenB = words.slice(i).reduce((sum, w) => sum + w.text.length + 1, 0) - 1;
+    const diff = Math.abs(lenA - lenB);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = i;
+    }
+  }
+  if (best <= 0 || best >= words.length - 1) return -1;
+  return best;
+}
+
+function buildAnimatedText(words: KineticWord[], activeIdx: number, style: CaptionStyleConfig): string {
+  const parts: string[] = [];
+  const lineBreakIdx = findLineBreakIndex(words);
+
+  for (let i = 0; i < words.length; i++) {
+    if (lineBreakIdx > 0 && i === lineBreakIdx) {
+      parts.push('\\N');
+    }
+    const escaped = escapeAss(words[i].text).toUpperCase();
+    if (i === activeIdx) {
+      const wordEnd = i < words.length - 1 ? words[i + 1].start : words[0].end + 0;
+      const wordDuration = Math.max(0.01, words[i].end - words[i].start);
+      const tags = wordAnimationTags(words[i].effect, words[i].emphasis, style, wordDuration);
+      parts.push(`{\\${tags}}${escaped}{\\r}`);
+    } else {
+      parts.push(escaped);
+    }
+  }
+
+  let text: string;
+  if (style.wordSpacing !== 100) {
+    const space = `{\\fscx${style.wordSpacing}} {\\fscx100}`;
+    text = parts.join(space);
+  } else {
+    text = parts.join(' ');
+  }
+
+  if (style.letterSpacing !== 0) {
+    text = `{\\fsp${style.letterSpacing}}${text}`;
+  }
+
+  return text;
+}
+
+// ---------------------------------------------------------------------------
+// ASS generation
+// ---------------------------------------------------------------------------
+
+export function buildKineticASS(
+  events: KineticCaptionEvent[],
+  {
+    title = 'Syntheniq captions',
+    styleId = 'hormozi',
+    captionPosition,
+    videoWidth = EXPORT_SPEC.width,
+    videoHeight = EXPORT_SPEC.height,
+  }: {
+    title?: string;
+    styleId?: string;
+    captionPosition?: number;
+    videoWidth?: number;
+    videoHeight?: number;
+  } = {}
+): string {
+  const config = loadCaptionStylesConfig();
+  // User request: center anchor at Y=1250px on 1920px canvas.
+  // 1920 - 1250 = 670px from bottom = ~35% position
+  const pos = captionPosition ?? 35;
+  const marginV = Math.round(videoHeight * pos / 100);
+  // Padding: 60px left, 140px right to avoid TikTok UI overlap
+  const marginL = 60;
+  const marginR = 140;
+
+  const styleLines = Object.values(config.styles).map((s) => buildAssStyleLine(s, marginV, marginL, marginR));
+
+  const styleIdToName: Record<string, string> = {};
+  for (const s of Object.values(config.styles)) {
+    styleIdToName[s.id] = s.name;
+  }
+
   const lines = [
     '[Script Info]',
     `Title: ${title}`,
@@ -192,40 +435,69 @@ export function buildKineticASS(events: KineticCaptionEvent[], { title = 'Synthe
     'WrapStyle: 0',
     'ScaledBorderAndShadow: yes',
     'YCbCr Matrix: TV.709',
-    'PlayResX: 1080',
-    'PlayResY: 1920',
+    `PlayResX: ${videoWidth}`,
+    `PlayResY: ${videoHeight}`,
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    'Style: Default,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Emphatic,DejaVu Sans Bold,82,&H00FFFF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Dynamic,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: Punchy,DejaVu Sans Bold,78,&H00FF8800,&H000019FF,&H80000000,&H80000000,-1,0,0,0,105,105,0.8,0,1,3,1,2,60,60,300,1',
-    'Style: GreenEmphasis,DejaVu Sans Bold,82,&H0000FF00,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
-    'Style: RedEmphasis,DejaVu Sans Bold,82,&H000000FF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,110,110,0.5,0,1,3,1,2,60,60,300,1',
+    ...styleLines,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
 
   for (const ev of events) {
-    const text = ev.words.map((w) => escapeAss(w.text)).join(' ');
-    const styleName =
-      ev.style === 'emphatic' ? 'Emphatic'
-      : ev.style === 'dynamic' ? 'Dynamic'
-      : ev.style === 'punchy' ? 'Punchy'
-      : 'Default';
+    const configStyle = config.styles[ev.style] || config.styles[styleId] || config.styles['hormozi'];
+    const assStyleName = styleIdToName[configStyle.id] || 'Hormozi';
 
-    const layer = ev.words.length > 0 ? Math.max(...ev.words.map((w) => w.layer), 0) : 0;
+    // ONE Dialogue line per event - the full phrase shows as one text element
+    // with the currently-speaking word highlighted. This prevents text overlapping
+    // that happens when multiple Dialogue lines appear simultaneously.
+    const eventStart = ev.start;
+    const eventEnd = ev.end;
 
-    let effect = '';
-    if (ev.words.length === 1) {
-      const w = ev.words[0];
-      effect = effectParams(w.effect, w.emphasis);
+    // Build full text with word-by-word highlight animation
+    // The active word changes color via ASS override tags
+    const textParts: string[] = [];
+    const lineBreakIdx = findLineBreakIndex(ev.words);
+
+    for (let i = 0; i < ev.words.length; i++) {
+      if (lineBreakIdx > 0 && i === lineBreakIdx) {
+        textParts.push('\\N');
+      }
+
+      const w = ev.words[i];
+      const escaped = escapeAss(w.text).toUpperCase();
+
+      // Apply word duration based animation only to the first word
+      // (ASS handles the timing of \t/\kf tags per-dialogue, not per-word
+      // when words share the same Dialogue line)
+      const wordDuration = Math.max(0.01, w.end - w.start);
+      const tags = wordAnimationTags(w.effect, w.emphasis, configStyle, wordDuration);
+
+      if (w.effect !== 'none' && tags) {
+        textParts.push(`{${tags}}${escaped}{}`);
+      } else {
+        textParts.push(escaped);
+      }
     }
 
+    let text: string;
+    if (configStyle.wordSpacing !== 100) {
+      const space = `{\\fscx${configStyle.wordSpacing}} {\\fscx100}`;
+      text = textParts.join(space);
+    } else {
+      text = textParts.join(' ');
+    }
+
+    if (configStyle.letterSpacing !== 0) {
+      text = `{\\fsp${configStyle.letterSpacing}}${text}`;
+    }
+
+    const layer = Math.max(...ev.words.map((ww) => ww.layer), 0);
+
     lines.push(
-      `Dialogue: ${layer}, ${fmtAssTime(ev.start)}, ${fmtAssTime(ev.end)}, ${styleName}, ,0,0,0,${effect},${text}`
+      `Dialogue: ${layer}, ${fmtAssTime(eventStart)}, ${fmtAssTime(eventEnd)}, ${assStyleName}, ,${marginL},${marginR},${marginV},,${text}`
     );
   }
 
@@ -304,8 +576,9 @@ export function splitTwoLines(text: string, maxLen = 20): string {
 
 export function escapeAss(text: string): string {
   return String(text || '')
-    .replace(/[{}]/g, '')
-    .replace(/\\/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -320,7 +593,35 @@ export function fmtAssTime(sec: number): string {
   return `${h}:${pad(m)}:${pad(ss)}.${pad(cc)}`;
 }
 
-export function buildASS(events: CaptionEvent[] | undefined | null, { title = 'Syntheniq captions' }: { title?: string } = {}): string {
+export function buildASS(
+  events: CaptionEvent[] | undefined | null,
+  {
+    title = 'Syntheniq captions',
+    styleId = 'hormozi',
+    captionPosition,
+    videoWidth = EXPORT_SPEC.width,
+    videoHeight = EXPORT_SPEC.height,
+  }: {
+    title?: string;
+    styleId?: string;
+    captionPosition?: number;
+    videoWidth?: number;
+    videoHeight?: number;
+  } = {}
+): string {
+  const config = loadCaptionStylesConfig();
+  const pos = captionPosition ?? config.captionPosition.default;
+  const marginV = Math.round(videoHeight * pos / 100);
+
+  let style: CaptionStyleConfig;
+  try {
+    style = getCaptionStyle(styleId);
+  } catch {
+    style = config.styles['hormozi'];
+  }
+
+  const styleLines = Object.values(config.styles).map((s) => buildAssStyleLine(s, marginV));
+
   const lines = [
     '[Script Info]',
     `Title: ${title}`,
@@ -328,27 +629,37 @@ export function buildASS(events: CaptionEvent[] | undefined | null, { title = 'S
     'WrapStyle: 0',
     'ScaledBorderAndShadow: yes',
     'YCbCr Matrix: TV.709',
-    'PlayResX: 1080',
-    'PlayResY: 1920',
+    `PlayResX: ${videoWidth}`,
+    `PlayResY: ${videoHeight}`,
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    'Style: Default,DejaVu Sans Bold,72,&H00FFFFFF,&H000019FF,&H80000000,&H80000000,-1,0,0,0,100,100,0.5,0,1,3,1,2,60,60,300,1',
+    ...styleLines,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
+
   for (const ev of events || []) {
     const text = splitTwoLines(escapeAss(ev.text));
-    lines.push(`Dialogue: 0,${fmtAssTime(ev.start)},${fmtAssTime(ev.end)},Default,,0,0,0,,${text}`);
+    lines.push(
+      `Dialogue: 0, ${fmtAssTime(ev.start)}, ${fmtAssTime(ev.end)}, ${style.name}, ,0,0,${marginV},,${text}`
+    );
   }
+
   return lines.join('\n') + '\n';
 }
 
 export function writeASS(
   filePath: string,
   events: CaptionEvent[],
-  opts?: { title?: string }
+  opts?: {
+    title?: string;
+    styleId?: string;
+    captionPosition?: number;
+    videoWidth?: number;
+    videoHeight?: number;
+  }
 ): { filePath: string; eventCount: number } {
   const content = buildASS(events, opts);
   fs.writeFileSync(filePath, content, 'utf8');

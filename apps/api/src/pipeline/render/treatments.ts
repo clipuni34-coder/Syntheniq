@@ -2,13 +2,22 @@
 // from EditDecision + MotionPlan + kinetic captions.
 import fs from 'node:fs';
 import path from 'node:path';
-import { EXPORT_SPEC } from './index.js';
+import { EXPORT_SPEC, escapeFilterPath } from './index.js';
+import { ROOT } from '../../config.js';
 import type { EditDecision, EditSegment } from '../editorial/plan.js';
 import type { MotionCue, MotionPlan, MediaInfo } from '../editorial/motion.js';
 import type { KineticCaptionEvent } from './captions.js';
 import type { SoundEffect } from './sfx.js';
-import type { FaceTrack } from '../../types.js';
-import { applyVisualEffects, buildFaceHighlightFilters, buildBackgroundBlurFilters, buildSmartCropFilters, type VisualEffectOptions } from './faces.js';
+import type { FaceTrack, BRollCue } from '../../types.js';
+import {
+  applyVisualEffects,
+  buildFaceHighlightFilters,
+  buildBackgroundBlurFilters,
+  buildSmartCropFilters,
+  buildBRollFilters,
+  type BRollFilterResult,
+  type VisualEffectOptions,
+} from './faces.js';
 
 export interface TreatmentResult {
   videoFilters: string[];
@@ -17,6 +26,8 @@ export interface TreatmentResult {
   captionFilters: string[];
   motionCues: MotionCue[];
   keyframes: Array<{ t: number; type: string }>;
+  brollCues: BRollCue[];
+  brollNotes: string[];
   warnings: string[];
 }
 
@@ -28,6 +39,8 @@ export interface TreatmentOptions {
   avoidTransitionsAtEdges?: boolean;
   faces?: FaceTrack[];
   visualEffects?: VisualEffectOptions;
+  /** Resolved B-roll overlay cues (injected for tests / loaded from cues.json in production). */
+  brollCues?: BRollCue[];
 }
 
 const DEFAULT_OPTIONS: Required<TreatmentOptions> = {
@@ -38,6 +51,7 @@ const DEFAULT_OPTIONS: Required<TreatmentOptions> = {
   avoidTransitionsAtEdges: true,
   faces: [],
   visualEffects: {},
+  brollCues: [],
 };
 
 function buildScaleCropFilters(media: MediaInfo): string[] {
@@ -48,6 +62,10 @@ function buildScaleCropFilters(media: MediaInfo): string[] {
     `fps=${EXPORT_SPEC.fps}`,
     'format=yuv420p',
   ];
+}
+
+function fontsDir(): string {
+  return path.join(ROOT, 'assets', 'fonts');
 }
 
 function buildColorGradeFilters(): string[] {
@@ -65,14 +83,14 @@ function buildVintageOverlayFilters(): string[] {
 function buildCaptionFilters(options: Required<TreatmentOptions>): string[] {
   const filters: string[] = [];
   if (options.assFile) {
-    filters.push(`subtitles=filename='${options.assFile}'`);
+    filters.push(`subtitles=filename='${escapeFilterPath(options.assFile)}':fontsdir='${escapeFilterPath(fontsDir())}'`);
   }
   return filters;
 }
 
 function buildKineticCaptionFilter(options: Required<TreatmentOptions>): string | null {
   if (!options.kineticAssFile) return null;
-  return `ass=filename='${options.kineticAssFile}'`;
+  return `subtitles=filename='${escapeFilterPath(options.kineticAssFile)}':fontsdir='${escapeFilterPath(fontsDir())}'`;
 }
 
 function mergeASSFiles(baseFile: string | null, kineticFile: string | null, outDir: string): string | null {
@@ -310,24 +328,34 @@ export async function buildTreatment(
     allKeyframes.push(...keyframes.map((k) => ({ t: k.t, type: k.type })));
 
     if (faces.length > 0) {
+      const relSegStart = seg.start - clipStart;
+      const relSegEnd = seg.end - clipStart;
       const segFaces = faces.filter(
-        (f) => f.start >= seg.start && f.start <= seg.end
+        (f) => f.start >= relSegStart && f.start <= relSegEnd
       );
-       if (segFaces.length > 0) {
-        if (opts.visualEffects?.backgroundBlur && opts.visualEffects.backgroundBlur > 0) {
-          const bb = buildBackgroundBlurFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height);
-          segFilters.push(...bb.filters);
-        }
-        if (opts.visualEffects?.smartCrop !== false) {
-          const sc = buildSmartCropFilters(segFaces, decision.media.width, decision.media.height);
-          segFilters.push(...sc.filters);
-          allKeyframes.push(...sc.keyframes);
-        }
-        if (opts.visualEffects?.faceHighlight) {
-          const hl = buildFaceHighlightFilters(segFaces, opts.visualEffects, decision.media.width, decision.media.height);
-          segFilters.push(...hl.filters);
-          allKeyframes.push(...hl.keyframes);
-        }
+      // In single-segment case, face timestamps stay clip-relative (no trim reset).
+      // In multi-segment case, subtract segment start since trim resets timestamps to 0.
+      const faceOffset = isMultiSegment ? relSegStart : 0;
+      const relFaces = segFaces.map((f) => ({
+        ...f,
+        start: f.start - faceOffset,
+        end: f.end - faceOffset,
+      }));
+       if (relFaces.length > 0) {
+         if (opts.visualEffects?.backgroundBlur && opts.visualEffects.backgroundBlur > 0) {
+           const bb = buildBackgroundBlurFilters(relFaces, opts.visualEffects, decision.media.width, decision.media.height);
+           segFilters.push(...bb.filters);
+         }
+         if (opts.visualEffects?.smartCrop !== false) {
+           const sc = buildSmartCropFilters(relFaces, decision.media.width, decision.media.height);
+           segFilters.push(...sc.filters);
+           allKeyframes.push(...sc.keyframes);
+         }
+         if (opts.visualEffects?.faceHighlight) {
+           const hl = buildFaceHighlightFilters(relFaces, opts.visualEffects, decision.media.width, decision.media.height);
+           segFilters.push(...hl.filters);
+           allKeyframes.push(...hl.keyframes);
+         }
       }
     }
 
@@ -362,22 +390,28 @@ export async function buildTreatment(
 
   const captionFilter = buildKineticCaptionFilter(opts);
 
+  // Only use kinetic captions (middle position) - do NOT merge with base captions
+  // Base captions appear at the bottom (MarginV=420) and cause overlap/conflict
+  // Kinetic captions appear in the middle band (optimal TikTok position)
+  // Previously: mergedAssFile = mergeASSFiles(opts.assFile, opts.kineticAssFile, ...)
+  // which combined BOTH base (bottom) and kinetic (middle) captions on screen
   let mergedAssFile: string | null = null;
-  if (opts.assFile && opts.kineticAssFile && captionFilter) {
-    mergedAssFile = mergeASSFiles(opts.assFile, opts.kineticAssFile, opts.outDir || '');
-  }
+  // Skip merge entirely - kinetic captions contain full phrase text with animations
 
-  const baseCaptionFilters = mergedAssFile
-    ? [`ass=filename='${mergedAssFile}'`]
+  // Use kinetic-only captions (middle position), or fall back to base if no kinetic
+  const baseCaptionFilters = captionFilter
+    ? [captionFilter]
     : buildCaptionFilters(opts);
 
   return {
     videoFilters,
     audioFilters,
-    captionFilter: mergedAssFile ? null : captionFilter,
+    captionFilter: null, // Always null — all caption filters are in captionFilters array
     captionFilters: baseCaptionFilters,
     motionCues: allCues,
     keyframes: allKeyframes,
+    brollCues: opts.brollCues ?? [],
+    brollNotes: [],
     warnings,
   };
 }
@@ -397,40 +431,80 @@ export function buildRenderCommand(
   const hasSfx = sfxAudioFiles.length > 0 && sfxEffects.length > 0;
   const canMixAudio = hasSfx && hasAudio;
 
-  if (hasLabels || hasSfx) {
+  const brollCues = treatment.brollCues ?? [];
+  // Build the B-roll overlay subgraph up front so we only force -filter_complex
+  // when at least one valid cue survives validation (invalid/missing sources
+  // degrade out instead of leaving an unmapped [outv] pad).
+  const br: BRollFilterResult = buildBRollFilters(brollCues, {
+    baseLabel: '[base]',
+    startInputIndex: 1 + sfxAudioFiles.length,
+    exportWidth: EXPORT_SPEC.width,
+    exportHeight: EXPORT_SPEC.height,
+    fps: EXPORT_SPEC.fps,
+  });
+  const hasBroll = br.inputCount > 0;
+
+  if (hasLabels || hasSfx || hasBroll) {
     // Complex filtergraph with intermediate labels — must use -filter_complex
     const inputs: string[] = ['-hide_banner', '-y', '-ss', String(start), '-t', String(duration), '-i', input];
     
     // Add caption filters to the last video filter chain
     if (captionFilters.length > 0) {
-      const lastIdx = allVideoFilters.length - 1;
-      allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
+      if (allVideoFilters.length === 0) {
+        // No existing video filters, create a new chain starting from main input
+        allVideoFilters.push(`[0:v]${captionFilters.join(',')},setsar=1,format=yuv420p`);
+      } else if (allVideoFilters[0].startsWith('[0:v]')) {
+        // Chain already starts with [0:v], append captions to first filter
+        allVideoFilters[0] = allVideoFilters[0].replace(/(\[0:v\])/, `[0:v]${captionFilters.join(',')},`);
+      } else {
+        const lastIdx = allVideoFilters.length - 1;
+        if (lastIdx >= 0 && allVideoFilters[lastIdx].includes('[') && allVideoFilters[lastIdx].includes(']')) {
+          // Already has input label, append captions
+          allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
+        } else {
+          // No input label: just append captions (the [0:v] input label is handled
+          // by the singleChain builder on line ~462 when hasLabels is false,
+          // or is already present at the head of the labeled chain).
+          allVideoFilters[lastIdx] = `${allVideoFilters[lastIdx]},${captionFilters.join(',')}`;
+        }
+      }
     }
     
     // When using filter_complex, ensure video filters have proper input/output labels.
     // When SFX are present without multi-segment labels, join all video filters into a
     // single chain and force yuv420p to pass QC (input may be yuvj420p).
+    // The base video pad must terminate at a known label so B-roll overlays can
+    // consume it: with B-roll it ends at [base] (overlays then emit [outv]);
+    // otherwise it ends at [outv] directly.
+    const outLabel = hasBroll ? 'base' : 'outv';
     let videoChains: string[];
     if (!hasLabels && allVideoFilters.length > 0 && !allVideoFilters[0].includes('[0:v]')) {
-      // Join all filters into a single chain with [0:v] input and [outv] output
-      const singleChain = `[0:v]${allVideoFilters.join(',')},setsar=1,setparams=range=tv,format=yuv420p[outv]`;
+      // Join all filters into a single chain with [0:v] input and [outLabel] output
+      const singleChain = `[0:v]${allVideoFilters.join(',')},setsar=1,setparams=range=tv,format=yuv420p[${outLabel}]`;
       videoChains = [singleChain];
     } else {
       videoChains = allVideoFilters;
       // Ensure output label exists on the last video chain
       const lastVidIdx = videoChains.length - 1;
-      if (!videoChains[lastVidIdx].includes('[outv]')) {
-        videoChains[lastVidIdx] = `${videoChains[lastVidIdx]},setsar=1,setparams=range=tv,format=yuv420p[outv]`;
+      if (!videoChains[lastVidIdx].includes(`[${outLabel}]`)) {
+        videoChains[lastVidIdx] = `${videoChains[lastVidIdx]},setsar=1,setparams=range=tv,format=yuv420p[${outLabel}]`;
       }
     }
     
-    // Add SFX input files
+    // Add SFX input files (indices 1..N after the main input 0)
     if (hasSfx) {
       for (const sfxFile of sfxAudioFiles) {
         inputs.push('-i', sfxFile);
       }
     }
-    
+
+    // B-roll video inputs come after SFX inputs, so their ffmpeg input index is
+    // 1 (main) + sfxAudioFiles.length + cueIndex. B-roll is silent: base audio
+    // is left untouched. (br was built up front from treatment.brollCues.)
+    for (const src of br.inputs) {
+      inputs.push('-i', src);
+    }
+
     // Build audio filter chains (separate from video chains in filter_complex)
     const audioChains: string[] = [];
 
@@ -445,18 +519,30 @@ export function buildRenderCommand(
       }
 
       if (hasAudio) {
-        // Mix original audio with all SFX
-        const allAudioInputs = `[0:a]` + sfxLabels.join('');
-        audioChains.push(`${allAudioInputs}amix=inputs=${sfxLabels.length + 1}:dropout_transition=2,volume=0.8,atrim=duration=${duration}[outa]`);
+        // Audio ducking: compress background audio when SFX plays
+        // First create a sidechain trigger signal from all SFX
+        const sfxMixLabel = '[sfx_mix]';
+        if (sfxLabels.length > 1) {
+          audioChains.push(`${sfxLabels.join('')}amix=inputs=${sfxLabels.length}:normalize=0,asetrate=48000${sfxMixLabel}`);
+        } else {
+           audioChains.push(`${sfxLabels[0]}asetrate=48000${sfxMixLabel}`);
+        }
+        // Duck background audio when SFX plays using sidechain compression
+        // Sidechain input is the SFX mix trigger, main input is original audio
+        // threshold=0.02, ratio=4, attack=5ms, release=150ms
+        audioChains.push(`[0:a]${sfxMixLabel}sidechaincompress=threshold=0.02:ratio=4:attack=5:release=150:makeup=1[ducked]`);
+        // Mix ducked background with the SFX mix for final output
+        audioChains.push(`[ducked]${sfxMixLabel}amix=inputs=2:dropout_transition=2,atrim=duration=${duration}[outa]`);
       } else {
         // No original audio, just mix the SFX files together
         const allAudioInputs = sfxLabels.join('');
-        audioChains.push(`${allAudioInputs}amix=inputs=${sfxLabels.length}:dropout_transition=2,volume=0.8,atrim=duration=${duration}[outa]`);
+        audioChains.push(`${allAudioInputs}amix=inputs=${sfxLabels.length}:dropout_transition=2,atrim=duration=${duration}[outa]`);
       }
     }
     
-     // Combine all filter chains with semicolons
-     const allChains = [...videoChains, ...audioChains];
+     // Combine all filter chains with semicolons. B-roll chains consume
+      // [base] and the final overlay emits [outv], which we map as the output.
+      const allChains = [...videoChains, ...br.chains, ...audioChains];
      inputs.push('-filter_complex', allChains.join(';'));
     
      inputs.push('-map', '[outv]');

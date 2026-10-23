@@ -138,10 +138,11 @@ export async function buildApp() {
   }
 
   // Serve the exported web app when it exists (single-command local demo).
+  // Disabled: static serving at '/' was catching all routes including /health.
   const webIndex = path.join(WEB_OUT_DIR, 'index.html');
   if (fs.existsSync(webIndex)) {
-    const serve = staticRoot(WEB_OUT_DIR);
-    app.get('/*', async (req, reply) => serve(req, reply));
+    // const serve = staticRoot(WEB_OUT_DIR);
+    // app.get('/*', async (req, reply) => serve(req, reply));
   } else {
     app.get('/', async () => ({
       name: 'Syntheniq API',
