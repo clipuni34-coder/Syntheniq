@@ -1,0 +1,57 @@
+{
+  "business": {
+    "files": [],
+    "keywords": ["business", "office", "work", "corporate", "meeting", "deal", "startup", "team", "people"],
+    "description": "Business, office, and corporate environments"
+  },
+  "money": {
+    "files": [],
+    "keywords": ["money", "cash", "dollars", "wealth", "rich", "bank", "finance", "investment", "stock", "million", "billion", "earn", "save"],
+    "description": "Finance, money, and wealth visuals"
+  },
+  "nature": {
+    "files": [],
+    "keywords": ["nature", "forest", "tree", "flower", "outdoor"],
+    "description": "Nature and outdoor scenes"
+  },
+  "food": {
+    "files": [],
+    "keywords": ["food", "restaurant", "cooking", "eating", "cuisine", "coffee"],
+    "description": "Food, cooking, and restaurant scenes"
+  },
+  "tech": {
+    "files": [],
+    "keywords": ["technology", "computer", "coding", "developer", "app", "software", "digital", "internet", "phone", "code"],
+    "description": "Technology and computer scenes"
+  },
+  "people": {
+    "files": [],
+    "keywords": ["people", "crowd", "team", "community", "friends", "social"],
+    "description": "People and social scenes"
+  },
+  "success": {
+    "files": [],
+    "keywords": ["success", "achievement", "win", "goal", "victory", "celebration", "learn", "education"],
+    "description": "Success and achievement visuals"
+  },
+  "travel": {
+    "files": [],
+    "keywords": ["travel", "vacation", "beach", "mountain", "city", "adventure"],
+    "description": "Travel and adventure scenes"
+  },
+  "workout": {
+    "files": [],
+    "keywords": ["fitness", "gym", "exercise", "workout", "training"],
+    "description": "Fitness and exercise scenes"
+  },
+  "crypto": {
+    "files": [],
+    "keywords": ["crypto", "bitcoin", "blockchain", "trading", "sell"],
+    "description": "Cryptocurrency and blockchain visuals"
+  },
+  "time": {
+    "files": [],
+    "keywords": ["time", "clock", "calendar", "plan", "future"],
+    "description": "Time, clocks, and scheduling"
+  }
+}
