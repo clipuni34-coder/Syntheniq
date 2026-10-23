@@ -48,7 +48,7 @@ Prerequisites: **Node ≥ 18**, **FFmpeg 6+** (`ffmpeg` + `ffprobe` on PATH),
 npm install
 cp .env.example .env   # optional — defaults work out of the box
 
-# Terminal 1: API + engine (http://localhost:8787)
+# Terminal 1: API + engine (http://localhost:8788)
 npm run dev:api
 
 # Terminal 2: studio with hot reload (http://localhost:3000)
@@ -59,7 +59,7 @@ Or serve the built studio straight from the API (single command):
 
 ```bash
 npm run build:web   # static export → apps/web/out, served by the API
-npm run dev:api      # studio + API together on http://localhost:8787
+npm run dev:api      # studio + API together on http://localhost:8788
 ```
 
 Run the suite (includes a real upload → analyze → export → download pass

@@ -82,25 +82,23 @@ export function apiBase(): string {
   if (configured) return configured;
   if (typeof window !== 'undefined') {
     // Single-origin mode: the API serves the built web app itself.
-    if (window.location.port === '8787') return window.location.origin;
-    // Cloudflare Tunnel: the page is served from https://<sub>.trycloudflare.com
-    // but apiBase() fell through to localhost:8787, producing a cross-origin video
-    // load that Safari blocks with "Unsupported media type". Return the tunnel
-    // origin so every request (API + media) stays same-origin.
+    if (window.location.port === '8787' || window.location.port === '8788') return window.location.origin;
+     // Cloudflare Tunnel: the page is served from https://<sub>.trycloudflare.com
+    // but apiBase() fell through to localhost:8788, producing a cross-origin
+    // video load that Safari blocks with "Unsupported media type". Return the
+    // tunnel origin so every request (API + media) stays same-origin.
     if (window.location.hostname.endsWith('.trycloudflare.com')) return window.location.origin;
     // GitHub Codespaces: detect forwarded port pattern.
-    // The web app runs on one forwarded port, API on another (8787).
+    // The web app runs on one forwarded port, API on another (8788).
     // If we're in a codespace preview, derive the API URL by replacing
-    // the web port in the hostname with 8787.
+    // the web port in the hostname with 8788.
     const host = window.location.hostname;
     const webPort = window.location.port;
-    if (webPort !== '8787' && host.includes('preview.app.github.')) {
-      // Codespaces preview URL: codespace-name-<port>.preview.app.github.dev
-      // Replace the web port in hostname to reach the API on 8787.
-      return window.location.protocol + '//' + host.replace(webPort, '8787');
+    if (webPort !== '8788' && host.includes('preview.app.github.')) {
+      return window.location.protocol + '//' + host.replace(webPort, '8788');
     }
   }
-  return 'http://localhost:8787';
+  return 'http://localhost:8788';
 }
 
 export async function api<T = Record<string, unknown>>(path: string, opts: RequestInit = {}): Promise<T> {

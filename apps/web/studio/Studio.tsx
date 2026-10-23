@@ -4,9 +4,10 @@
 // Clip preview → Export → Download. Hash-routed, fully client-side.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DragEvent, FormEvent } from 'react';
-import { Play, Upload, Film, Download, MoveRight, ArrowLeft } from 'lucide-react';
+import { Play, Upload, Film, Download, MoveRight, ArrowLeft, ToggleLeft, ToggleRight } from 'lucide-react';
 import {
   api,
+  apiBase,
   followJob,
   fmtBytes,
   fmtClock,
@@ -26,14 +27,16 @@ type Route =
   | { name: 'projects' }
   | { name: 'project'; projectId: string }
   | { name: 'preview'; projectId: string; clipId: string }
-  | { name: 'export'; projectId: string; clipId: string };
+  | { name: 'export'; projectId: string; clipId: string; broll?: boolean };
 
 function parseHash(): Route {
   if (typeof window === 'undefined') return { name: 'home' };
   const hash = window.location.hash || '#/';
+  const url = new URL(window.location.origin + hash);
   let m: RegExpMatchArray | null;
-  if ((m = hash.match(/^#\/p\/([A-Za-z0-9-]+)\/clip\/([A-Za-z0-9-]+)\/export$/))) {
-    return { name: 'export', projectId: m[1], clipId: m[2] };
+  if ((m = hash.match(/^#\/p\/([A-Za-z0-9-]+)\/clip\/([A-Za-z0-9-]+)\/export($|\?)/))) {
+    const params = new URLSearchParams(url.hash.split('?')[1] || '');
+    return { name: 'export', projectId: m[1], clipId: m[2], broll: params.get('broll') === 'true' };
   }
   if ((m = hash.match(/^#\/p\/([A-Za-z0-9-]+)\/clip\/([A-Za-z0-9-]+)$/))) {
     return { name: 'preview', projectId: m[1], clipId: m[2] };
@@ -1018,8 +1021,17 @@ function ClipsView({ project, onDeleted }: { project: Project; onDeleted: () => 
 
 /* ---------- preview --------------------------------------------------------- */
 
+function BRollIcon({ enabled }: { enabled: boolean }) {
+  return enabled ? (
+    <ToggleRight size={16} style={{ color: '#d9a441' }} />
+  ) : (
+    <ToggleLeft size={16} style={{ color: '#888' }} />
+  );
+}
+
 function PreviewView({ projectId, clipId }: { projectId: string; clipId: string }) {
   const [snap, setSnap] = useState<{ project: Project; clip: Clip; transcript: Segment[] } | null>(null);
+  const [wantBroll, setWantBroll] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -1146,10 +1158,21 @@ function PreviewView({ projectId, clipId }: { projectId: string; clipId: string 
               No transcribed speech in this range — the pick came from the picture and sound.
             </div>
           )}
-          <div className="btn-row">
-            <button className="btn btn-primary" onClick={() => go(`#/p/${project.id}/clip/${clip.id}/export`)}>
+           <div className="btn-row">
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (wantBroll) params.set('broll', 'true');
+                go(`#/p/${project.id}/clip/${clip.id}/export?${params.toString()}`);
+              }}
+            >
               <Download size={17} /> {clip.exported ? 'Download MP4' : 'Export vertical MP4'}
             </button>
+            <label className={`broll-toggle ${wantBroll ? 'enabled' : ''}`}>
+              <input type="checkbox" checked={wantBroll} onChange={(e) => setWantBroll(e.target.checked)} />
+              <BRollIcon enabled={wantBroll} /> Add B-roll cutaways
+            </label>
             <a className="btn btn-ghost" href={`#/p/${project.id}`}>
               All clips
             </a>
@@ -1162,7 +1185,7 @@ function PreviewView({ projectId, clipId }: { projectId: string; clipId: string 
 
 /* ---------- export + download ------------------------------------------------ */
 
-function ExportView({ projectId, clipId }: { projectId: string; clipId: string }) {
+function ExportView({ projectId, clipId, broll = false }: { projectId: string; clipId: string; broll?: boolean }) {
   const [snap, setSnap] = useState<{ project: Project; clip: Clip } | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
@@ -1194,10 +1217,8 @@ function ExportView({ projectId, clipId }: { projectId: string; clipId: string }
   useEffect(() => {
     if (!snap || snap.clip.exported || jobId || startedRef.current) return;
     startedRef.current = true;
-    api<{ jobId: string; job: Job }>(
-      `/v1/projects/${encodeURIComponent(projectId)}/clips/${encodeURIComponent(clipId)}/export`,
-      { method: 'POST' }
-    )
+    const exportUrl = `/v1/projects/${encodeURIComponent(projectId)}/clips/${encodeURIComponent(clipId)}/export${broll ? '?broll=true' : ''}`;
+    api<{ jobId: string; job: Job }>(exportUrl, { method: 'POST' })
       .then(({ jobId: id, job: j }) => {
         if (j?.status === 'done') {
           startedRef.current = false;
@@ -1277,7 +1298,18 @@ function ExportView({ projectId, clipId }: { projectId: string; clipId: string }
               </p>
             ) : null}
             <div className="btn-row">
-              <a className="btn btn-primary" href={`${fileUrl}?download=1`}>
+              <a
+                className="btn btn-primary"
+                href={`${fileUrl}?download=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Direct download: use the API URL without hash routing
+                  const url = `${apiBase()}/v1/projects/${encodeURIComponent(project.id)}/clips/${encodeURIComponent(clip.id)}/file?download=1`;
+                  window.open(url, '_blank');
+                }}
+              >
                 <Download size={17} /> Download MP4
               </a>
               <a className="btn btn-ghost" href={`#/p/${project.id}`}>
@@ -1415,7 +1447,12 @@ export function Studio() {
           <PreviewView key={`${route.projectId}-${route.clipId}`} projectId={route.projectId} clipId={route.clipId} />
         )}
         {route.name === 'export' && (
-          <ExportView key={`${route.projectId}-${route.clipId}`} projectId={route.projectId} clipId={route.clipId} />
+          <ExportView
+            key={`${route.projectId}-${route.clipId}-${route.broll}`}
+            projectId={route.projectId}
+            clipId={route.clipId}
+            broll={route.broll || false}
+          />
         )}
       </main>
 
