@@ -71,29 +71,38 @@ Key settings:
 ### Web (`apps/web/.env.example`)
 - `NEXT_PUBLIC_API_URL` - API endpoint (auto-detected in Codespaces)
 
-## Deployment
+## Quick Start: One-Click Deploy to Oracle Cloud (Always Free)
 
-### Quick Start on Oracle Cloud (Always Free)
+**No credit card required. Runs entirely free forever.**
 
-Syntheniq can run entirely on Oracle Cloud's Always Free tier with no credit card required for basic setup:
+1. **Create Oracle Cloud VM** (free tier):
+   - Go to [cloud.oracle.com](https://cloud.oracle.com) → Create VM
+   - Name: `syntheniq`
+   - Image: **Ubuntu 22.04 LTS**
+   - Shape: **VM.Standard.A1.Flex** (Always Free)
+   - Add your SSH key
 
-1. Create an Oracle Cloud account at [cloud.oracle.com](https://cloud.oracle.com)
-2. Launch a VM using the **Always Free** shape (VM.Standard.A1.Flex with 4x 1/4 OCPU, or VM.Standard.E2.1.Micro with 1 OCPU)
-3. SSH into your VM and run:
+2. **SSH and deploy**:
    ```bash
+   ssh ubuntu@YOUR_VM_IP
    curl -sSL https://raw.githubusercontent.com/clipuni34-coder/Syntheniq/main/scripts/oracle-setup.sh | bash
    ```
-4. That's it! The script will:
-   - Install Node.js, FFmpeg, Python dependencies
-   - Configure swap memory for low-RAM instances
-   - Set up optimized environment variables
-   - Build and start the API with PM2 process management
-   - Configure the firewall
 
-**After setup:**
-- API endpoints: `http://YOUR_VM_IP:8788/v1/...`
-- Health check: `http://YOUR_VM_IP:8788/health`
+3. **Done!** Access your API at `http://YOUR_VM_IP:8788`
 
-### Manual Deployment
+The script automatically installs everything and starts the service. Takes ~2 minutes.
 
-See `scripts/deploy.sh` for deployment instructions.
+### Oracle VM Creation Steps
+
+| Setting | Value |
+|---------|-------|
+| Name | `syntheniq` |
+| Image | Ubuntu 22.04 LTS |
+| Shape | VM.Standard.A1.Flex (1/4 OCPU × 4 = 1 full CPU, 24GB RAM total) |
+
+### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| POST | `/v1/projects` | Create project |
+| POST | `/v1/projects/:id/clips/:clipId/export` | Generate export |
