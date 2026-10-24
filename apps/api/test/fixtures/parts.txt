@@ -1,0 +1,4 @@
+file '/workspace/app/apps/api/test/fixtures/part0.mp4'
+file '/workspace/app/apps/api/test/fixtures/part1.mp4'
+file '/workspace/app/apps/api/test/fixtures/part2.mp4'
+file '/workspace/app/apps/api/test/fixtures/part3.mp4'

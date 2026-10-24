@@ -14,7 +14,7 @@ function int(name: string, fallback: number): number {
 
 export const DATA_DIR =
   process.env.SYNTHENIQ_DATA || process.env.DATA_DIR || path.join(ROOT, 'data');
-export const PORT = int('PORT', 8787);
+export const PORT = int('PORT', 8788);
 export const MAX_UPLOAD_MB = int('MAX_UPLOAD_MB', 2048);
 export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 

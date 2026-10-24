@@ -103,8 +103,12 @@ export function apiBase(): string {
 
 export async function api<T = Record<string, unknown>>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...((opts.headers as Record<string, string>) || {}) };
-  if (opts.body !== undefined && !headers['Content-Type']) {
+  const method = (opts.method || 'GET').toUpperCase();
+  if (method !== 'GET' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
+    if (opts.body === undefined) {
+      opts = { ...opts, body: '{}' };
+    }
   }
   const res = await fetch(apiBase() + path, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
