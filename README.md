@@ -74,7 +74,3 @@ Key settings:
 ## Deployment
 
 See `scripts/deploy.sh` for Fly.io or Render.com deployment instructions.
-
-## License
-
-MIT
