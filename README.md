@@ -73,4 +73,27 @@ Key settings:
 
 ## Deployment
 
+### Quick Start on Oracle Cloud (Always Free)
+
+Syntheniq can run entirely on Oracle Cloud's Always Free tier with no credit card required for basic setup:
+
+1. Create an Oracle Cloud account at [cloud.oracle.com](https://cloud.oracle.com)
+2. Launch a VM using the **Always Free** shape (VM.Standard.A1.Flex with 4x 1/4 OCPU, or VM.Standard.E2.1.Micro with 1 OCPU)
+3. SSH into your VM and run:
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/clipuni34-coder/Syntheniq/main/scripts/oracle-setup.sh | bash
+   ```
+4. That's it! The script will:
+   - Install Node.js, FFmpeg, Python dependencies
+   - Configure swap memory for low-RAM instances
+   - Set up optimized environment variables
+   - Build and start the API with PM2 process management
+   - Configure the firewall
+
+**After setup:**
+- API endpoints: `http://YOUR_VM_IP:8788/v1/...`
+- Health check: `http://YOUR_VM_IP:8788/health`
+
+### Manual Deployment
+
 See `scripts/deploy.sh` for deployment instructions.
