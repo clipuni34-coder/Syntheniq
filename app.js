@@ -489,6 +489,7 @@ async function startRaceMonitoring() {
   state.monitoring = true;
   
   while (state.monitoring) {
+    let msToClose;
     try {
       // Check JWT
       if (!state.jwt || Date.now() > state.jwtExpiry * 1000 - 60000) {
@@ -502,7 +503,7 @@ async function startRaceMonitoring() {
       const config = JSON.parse((await httpRequest('draw.ar-lottery06.com', '/WinGo/WinGo_30S.json')).body);
       const currentEnd = new Date(config.current.endTime).getTime();
       const now = Date.now();
-      const msToClose = currentEnd - now;
+      msToClose = currentEnd - now;
       
       // Get latest result
       const histRes = await httpRequest('draw.ar-lottery06.com',
