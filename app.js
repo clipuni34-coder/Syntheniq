@@ -564,42 +564,89 @@ async function startRaceMonitoring() {
         continue;
       }
       
-      // Get current round info
+      // Get current round info with faster polling for early leak detection
       const config = JSON.parse((await httpRequest('draw.ar-lottery06.com', '/WinGo/WinGo_30S.json')).body);
       const currentEnd = new Date(config.current.endTime).getTime();
       const now = Date.now();
       msToClose = currentEnd - now;
       
-      // Get latest result
+      // Get latest result - check multiple times for early leak
       const histRes = await httpRequest('draw.ar-lottery06.com',
         '/WinGo/WinGo_30S/GetHistoryIssuePage.json?pageNo=1&pageSize=10');
       const list = JSON.parse(histRes.body).data?.list || [];
       
-      // Detect new result
+      // Detect new result (leaked result)
       let newResultReceived = false;
-      if (list.length > 0 && list[0].issueNumber !== lastDetectedIssue) {
-        lastDetectedIssue = list[0].issueNumber;
-        const resultNum = list[0].number;
-        const resultColor = numberToColor(resultNum);
+      let leakedResult = null;
+      if (list.length > 0) {
+        if (list[0].issueNumber !== lastDetectedIssue) {
+          lastDetectedIssue = list[0].issueNumber;
+          const resultNum = list[0].number;
+          const resultColor = numberToColor(resultNum);
+          
+          state.lastResult = {
+            issueNumber: list[0].issueNumber,
+            number: resultNum,
+            color: resultColor,
+            classify: classify(resultNum),
+            timestamp: new Date().toISOString()
+          };
+          
+          // This is the LEAKED RESULT - available early
+          // If we're still well before close (>10s), it's an early leak
+          if (msToClose > 10000) {
+            leakedResult = {
+              issueNumber: list[0].issueNumber,
+              number: resultNum,
+              color: resultColor,
+              msToClose: msToClose,
+              timestamp: new Date().toISOString()
+            };
+            console.log(`🚨 EARLY LEAK: Result ${resultNum} (${resultColor}) detected ${Math.round(msToClose/1000)}s before close`);
+          }
+          
+          // Update trend history
+          updateHistory(state.lastResult);
+          newResultReceived = true;
+          state.stats.roundsDetected++;
+          
+          console.log(`[${new Date().toLocaleTimeString()}] Result: ${resultNum} (${resultColor})`);
+        }
+      }
+      
+      // BET ON LEAKED RESULT - if we have it early, use it
+      if (leakedResult && msToClose > 10000) {
+        // Use the ACTUAL leaked result to bet on the SAME draw number
+        const betColor = leakedResult.color.toLowerCase();
+        const nextIssue = config.current?.issueNumber;
         
-        state.lastResult = {
-          issueNumber: list[0].issueNumber,
-          number: resultNum,
-          color: resultColor,
-          classify: classify(resultNum),
-          timestamp: new Date().toISOString()
+        console.log(`⚡ LEAK-BASED BET: Using leaked result ${leakedResult.number} (${betColor}) ${Math.round(msToClose/1000)}s before close`);
+        
+        state.lastRaceWindow = {
+          color: betColor,
+          number: leakedResult.number,
+          msToClose: msToClose,
+          timestamp: new Date().toISOString(),
+          isLeakedResult: true
         };
         
-        // Update trend history
-        updateHistory(state.lastResult);
-        newResultReceived = true;
-        state.stats.roundsDetected++;
+        state.stats.raceWindowsFound++;
         
-        console.log(`[${new Date().toLocaleTimeString()}] Result: ${resultNum} (${resultColor})`);
+        sendDiscordAlert(
+          `**🚨 LEAKED RESULT DETECTED!**\n` +
+          `Number: **${leakedResult.number}**\n` +
+          `Color: **${leakedResult.color}**\n` +
+          `Time before close: ${Math.round(msToClose/1000)}s\n` +
+          `Betting on ${betColor} for next draw...`,
+          'success'
+        );
+        
+        await executeRaceBets(betColor, nextIssue);
+        state.predictedForIssue[nextIssue] = true;
       }
       
       // Generate predictions whenever we have 10 results
-      if (state.history.length >= 10) {
+      if (state.history.length >= 10 && !leakedResult) {
         const prediction = predictNext();
         const advanced = getAdvancedPrediction();
         
@@ -616,41 +663,6 @@ async function startRaceMonitoring() {
               `Methods: ${advanced.methods.pattern} | Recent: ${advanced.methods.recentTrend}`,
               'warning'
             );
-          }
-        }
-        
-        // Predict BEFORE close - when time to close is small
-        // Race window: capture leaked result and bet on next draw
-        if (msToClose > 2000 && msToClose < 25000) {
-          // We have a prediction, place bets on the NEXT draw
-          // The next draw's result will be compared to our bet
-          const nextIssue = config.current?.issueNumber;
-          if (nextIssue && !state.predictedForIssue[nextIssue]) {
-            const betColor = advanced ? advanced.prediction.toLowerCase() : prediction.prediction.toLowerCase();
-            console.log(`⚡ PRE-CLOSE PREDICTION: Betting on ${betColor} for next draw (${Math.round(msToClose/1000)}s before close)`);
-            
-            state.lastRaceWindow = {
-              color: betColor,
-              number: '-',
-              msToClose: msToClose,
-              timestamp: new Date().toISOString(),
-              prediction: true
-            };
-            
-            state.stats.raceWindowsFound++;
-            
-            sendDiscordAlert(
-              `**⚡ Early Prediction for Next Draw!**\n` +
-              `Issue: ${nextIssue}\n` +
-              `Predicted: **${advanced ? advanced.prediction : prediction.prediction}**\n` +
-              `Confidence: ${advanced ? advanced.confidence : prediction.confidence}\n` +
-              `Time left: ${Math.round(msToClose/1000)}s before close\n` +
-              `Betting on ${betColor}...`,
-              'success'
-            );
-            
-            await executeRaceBets(betColor, nextIssue);
-            state.predictedForIssue[nextIssue] = true;
           }
         }
       }
