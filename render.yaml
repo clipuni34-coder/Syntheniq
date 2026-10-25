@@ -10,6 +10,8 @@ services:
         value: "2349121493739"
       - key: FB999_PASSWORD
         value: "Drewziwugod6"
+      - key: FB999_JWT
+        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzkyOTIwMTI3IiwibmJmIjoiMTc5MjkyMDEyNyIsImV4cCI6IjE3OTI5MjE5MjciLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiIxMC8yNS8yMDI2IDEwOjUyOjA3IEFNIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWNjZXNzX1Rva2VuIiwiVXNlcklkIjoiMzY0MDcwIiwiVXNlck5hbWUiOiIyMzQ5MTIxNDkzNzM5IiwiVXNlclBob3RvIjoiMTEiLCJOaWNrTmFtZSI6Ik1lbWJlck5OR1BJTVBFIiwiQW1vdW50IjoiMC4wMCIsIkludGVncmFsIjoiMCIsIkxvZ2luTWFyayI6Ikg1IiwiTG9naW5UaW1lIjoiMTAvMjUvMjAyNiAxMDoyMjowNyBBTSIsIkxvZ2luSVBBZGRyZXNzIjoiMmEwNjo5OGMwOjM2MDA6OjEwMyIsIkRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIxNTcyIiwiVG9rZW5UeXBlIjoiQWNjZXNzX1Rva2VuIiwiUGhvbmVUeXBlIjoiMiIsIlVzZXJUeXBlIjoiMCIsIlVzZXJOYW1lMiI6IiIsImlzcyI6Imp3dElzc3VlciIsImF1ZCI6ImxvdHRlcnlUaWNrZXQifQ.YTt86DRcbJdQDB3nxxtuuE7YpdIh7vT-HjXL0ScP6l0"
       - key: NODE_ENV
         value: "production"
       - key: PORT

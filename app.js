@@ -31,6 +31,168 @@ const FB999_PASSWORD = process.env.FB999_PASSWORD || 'Drewziwugod6';
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL || null;
 const FB999_JWT = process.env.FB999_JWT || null; // Can set JWT via env var
 
+const app = express();
+app.use(express.json());
+
+// === State Management ===
+const state = {
+  jwt: null,
+  jwtExpiry: 0,
+  raceWins: [],
+  events: [],
+  monitoring: false,
+  lastResult: null,
+  lastRaceWindow: null,
+  stats: {
+    roundsDetected: 0,
+    raceWindowsFound: 0,
+    betsPlaced: 0,
+    wins: 0,
+    losses: 0
+  },
+  // === Trend Analysis State ===
+  history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
+  trendPrediction: null  // Current trend-based prediction
+};
+
+// === Trend Analysis Engine ===
+// Uses last 10 game results to predict next Big/Small outcome
+function updateHistory(result) {
+  state.history.push(result);
+  if (state.history.length > 10) {
+    state.history.shift();
+  }
+}
+
+function classifyTrend(results) {
+  const classes = results.map(r => r.classify);
+  const big = classes.filter(c => c === 'big').length;
+  const small = classes.filter(c => c === 'small').length;
+  
+  if (big > small) return 'big';
+  if (small > big) return 'small';
+  return 'balanced'; // Equal split
+}
+
+function analyzeTrend() {
+  if (state.history.length < 10) return null;
+  
+  const trend = classifyTrend(state.history);
+  const currentStreak = [];
+  const trendSequence = state.history.map(r => r.classify);
+  
+  // Find current streak
+  for (let i = trendSequence.length - 1; i >= 0; i--) {
+    if (trendSequence[i] === trendSequence[trendSequence.length - 1]) {
+      currentStreak.unshift(trendSequence[i]);
+    } else {
+      break;
+    }
+  }
+  
+  return {
+    trend: trend,
+    streak: currentStreak,
+    streakLength: currentStreak.length,
+    last10: {
+      big: trendSequence.filter(c => c === 'big').length,
+      small: trendSequence.filter(c => c === 'small').length,
+      violet: trendSequence.filter(c => c === 'violet').length
+    },
+    confidence: calculateConfidence(trendSequence, trend)
+  };
+}
+
+function calculateConfidence(sequence, trend) {
+  const counts = { big: 0, small: 0, violet: 0 };
+  sequence.forEach(c => counts[c]++);
+  
+  const total = sequence.length;
+  const ratio = counts[trend] / total;
+  
+  // Confidence based on how dominant the trend is
+  if (ratio >= 0.7) return 'high';
+  if (ratio >= 0.6) return 'medium';
+  if (ratio >= 0.55) return 'low';
+  return 'very-low';
+}
+
+// Predict next Big/Small outcome 2 seconds before close
+function predictNext() {
+  const analysis = analyzeTrend();
+  if (!analysis) return null;
+  
+  state.trendPrediction = {
+    prediction: analysis.trend === 'big' ? 'Big' : 'Small',
+    confidence: analysis.confidence,
+    basedOn: 'last_10_results',
+    trendAnalysis: analysis,
+    timestamp: new Date().toISOString()
+  };
+  
+  return state.trendPrediction;
+}
+
+// === API Signing (from winGoApiSearch.js) ===
+function randomHex() { 
+  return crypto.randomBytes(16).toString('hex'); 
+}
+
+function md5Hex(str) { 
+  return crypto.createHash('md5').update(str).digest('hex').toUpperCase().slice(0, 32); 
+}
+
+function signParams(params) {
+  const u = { ...params, language: 0 };
+  u.random = randomHex();
+  const c = JSON.parse(JSON.stringify(u));
+  const o = Object.keys(c).filter(key =>
+    !(typeof c[key] === 'object' && c[key] !== null && !Array.isArray(c[key])) && !Array.isArray(c[key]));
+  o.sort();
+  const i = {};
+  o.forEach(key => { if (c[key] !== null && c[key] !== "" && c[key] !== undefined) i[key] = c[key] === 0 ? 0 : c[key]; });
+  u.signature = md5Hex(JSON.stringify(i));
+  u.timestamp = Math.floor(Date.now() / 1e3);
+  return u;
+}
+
+// === HTTP Request Helpers ===
+function httpRequest(hostname, path, method = 'GET', body = null, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const allHeaders = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+      'Referer': 'https://fb999.com/',
+      'Origin': 'https://fb999.com',
+      'ar-origin': 'https://fb999.com',
+      ...headers
+    };
+    
+    if (body) {
+      allHeaders['Content-Length'] = Buffer.byteLength(body);
+    }
+    
+    const req = https.request({
+      hostname,
+      path,
+      method,
+      headers: allHeaders
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.setTimeout(30000);
+    if (body) {
+      req.write(body);
+    }
+    req.end();
+  });
+}
+
 // === JWT Management ===
 function loadJwt() {
   // Try environment variable first
@@ -64,104 +226,55 @@ function loadJwt() {
 
 function refreshJwt() {
   return new Promise((resolve) => {
-    console.log('Refreshing JWT token...');
+    console.log('Refreshing JWT token via API...');
     
-    const puppeteer = require('puppeteer');
+    const loginParams = {
+      username: FB999_PHONE,
+      pwd: FB999_PASSWORD,
+      phonetype: 2,
+      logintype: 'mobile',
+      packId: '',
+      deviceId: crypto.randomBytes(16).toString('hex'),
+      pixelId: '',
+      fbcId: '',
+      fbc: '',
+      fbp: '',
+      adId: ''
+    };
     
-    puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-      ignoreHTTPSErrors: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--window-size=414,896',
-        '--ignore-certificate-errors',
-        '--disable-blink-features=AutomationDetected,IsolateOrigins,IOSurfaceSharing',
-        '--disable-features=EncryptedClientHello'
-      ]
-    }).then(async (browser) => {
-      const page = await browser.newPage();
-      await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
-      await page.setViewport({ width: 414, height: 896, isMobile: true });
-      
-      try {
-        await page.goto('https://fb999.com/#/login', { waitUntil: 'networkidle2', timeout: 30000 });
-        await new Promise(r => setTimeout(r, 2000));
-        
-        // Fill credentials
-        await page.waitForSelector('input[name="userNumber"]', { timeout: 10000 });
-        await page.type('input[name="userNumber"]', FB999_PHONE, { delay: 50 });
-        
-        const pwdField = await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
-        await pwdField.type(FB999_PASSWORD, { delay: 50 });
-        
-        // Click login
-        await page.waitForFunction(() => {
-          const btns = Array.from(document.querySelectorAll('button'));
-          return btns.some(b => b.textContent.trim().toLowerCase().includes('login'));
-        }, { timeout: 15000 });
-        
-        await page.evaluate(() => {
-          const btn = Array.from(document.querySelectorAll('button'))
-            .find(b => b.textContent.trim().toLowerCase().includes('login'));
-          if (btn) btn.click();
-        });
-        
-        // Wait for response
-        await page.waitForTimeout(5000);
-        
-        // Check localStorage for token
-        const storage = await page.evaluate(() => {
-          const result = {};
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key) result[key] = localStorage.getItem(key);
+    const signed = signParams(loginParams);
+    const body = JSON.stringify(signed);
+    
+    httpRequest('fb999api.com', '/api/webapi/Login', 'POST', body)
+      .then(res => {
+        try {
+          const json = JSON.parse(res.body);
+          if (json.code === 0 && json.data?.token) {
+            const token = json.data.token;
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+            
+            state.jwt = token;
+            state.jwtExpiry = payload.exp || json.data.expiresIn;
+            
+            // Save to file for persistence
+            fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(json, null, 2));
+            
+            console.log('JWT refreshed successfully via API!');
+            console.log('JWT expiry:', new Date(state.jwtExpiry * 1000).toISOString());
+            resolve(true);
+          } else {
+            console.error('JWT refresh failed:', json.msg || ('code: ' + json.code));
+            resolve(false);
           }
-          return result;
-        });
-        
-        const token = storage.ar_token || storage.token;
-        if (token) {
-          console.log('JWT refreshed successfully!');
-          
-          // Get token expiry from JWT
-          const parts = token.split('.');
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          const exp = payload.exp || (Math.floor(Date.now() / 1000) + 1800);
-          
-          state.jwt = token;
-          state.jwtExpiry = exp;
-          
-          // Save to file
-          const loginResponse = {
-            data: {
-              token: token,
-              expiresIn: exp,
-              webSocketUrl: storage.ar_ws_url,
-              webSocketChannels: storage.ar_ws_channels
-            },
-            code: 0,
-            msg: 'Succeed'
-          };
-          fs.writeFileSync('/tmp/fb999_login_response.json', JSON.stringify(loginResponse, null, 2));
-          
-          resolve(true);
-        } else {
-          console.log('No token found in localStorage');
+        } catch(e) {
+          console.error('JWT parse error:', e.message);
           resolve(false);
         }
-      } catch (e) {
-        console.error('Login error:', e.message);
+      })
+      .catch(e => {
+        console.error('JWT refresh network error:', e.message);
         resolve(false);
-      } finally {
-        await browser.close();
-      }
-    }).catch(err => {
-      console.error('Browser launch error:', err.message);
-      resolve(false);
-    });
+      });
   });
 }
 
@@ -457,26 +570,26 @@ app.post('/api/start-monitoring', (req, res) => {
 async function init() {
   console.log('=== WinGo_30S Race Condition App ===\n');
   
-   // Initial JWT refresh/load
-   console.log('Loading JWT...');
-   state.jwt = loadJwt();
-   
-   if (!state.jwt) {
-     console.log('No valid JWT, refreshing...');
-     await refreshJwt();
-   } else {
-     // Set jwtExpiry from the loaded token's expiry
-     try {
-       if (FB999_JWT) {
-         const parts = FB999_JWT.split('.');
-         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-         state.jwtExpiry = payload.exp || 0;
-       } else {
-         const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
-         state.jwtExpiry = loginData.data?.expiresIn || 0;
-       }
-     } catch (e) {}
-   }
+  // Initial JWT refresh/load
+  console.log('Loading JWT...');
+  state.jwt = loadJwt();
+  
+  if (!state.jwt) {
+    console.log('No valid JWT, refreshing...');
+    await refreshJwt();
+  } else {
+    // Set jwtExpiry from the loaded token's expiry
+    try {
+      if (FB999_JWT) {
+        const parts = FB999_JWT.split('.');
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        state.jwtExpiry = payload.exp || 0;
+      } else {
+        const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
+        state.jwtExpiry = loginData.data?.expiresIn || 0;
+      }
+    } catch (e) {}
+  }
   
   // Start server
   app.listen(PORT, () => {
