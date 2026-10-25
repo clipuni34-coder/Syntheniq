@@ -301,7 +301,7 @@ function sendDiscordAlert(message, type = 'info') {
     embeds: [{
       title: `WinGo Racer Alert [${type.toUpperCase()}]`,
       description: message,
-      color: type === 'success' ? 0x00ff00 : type === 'error' ? 0xff0000 : 0x00aaff,
+      color: type === 'success' ? 0x00ff00 : type === 'error' ? 0xff0000 : type === 'warning' ? 0xffaa00 : 0x00aaff,
       timestamp: new Date().toISOString()
     }]
   });
@@ -386,6 +386,18 @@ async function startRaceMonitoring() {
           const prediction = predictNext();
           if (prediction) {
             console.log(`📈 Trend Prediction: ${prediction.prediction} (${prediction.confidence} confidence)`);
+            
+            // Notify when confidence is high or very high
+            if (prediction.confidence === 'high' || prediction.confidence === 'very-high') {
+              sendDiscordAlert(
+                `**🎯 HIGH CONFIDENCE PREDICTION!**\n` +
+                `Prediction: **${prediction.prediction}**\n` +
+                `Confidence: **${prediction.confidence.toUpperCase()}**\n` +
+                `Based on last 10 results\n` +
+                `Big: ${prediction.trendAnalysis?.last10.big} | Small: ${prediction.trendAnalysis?.last10.small} | Violet: ${prediction.trendAnalysis?.last10.violet}`,
+                'warning'
+              );
+            }
           }
         }
         
