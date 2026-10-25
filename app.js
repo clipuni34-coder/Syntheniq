@@ -519,7 +519,8 @@ app.get('/api/status', (req, res) => {
     lastResult: state.lastResult,
     lastRaceWindow: state.lastRaceWindow,
     stats: state.stats,
-    race_wins: state.raceWins
+    race_wins: state.raceWins,
+    history: state.history.slice(-10)  // Last 10 results for UI
   });
 });
 

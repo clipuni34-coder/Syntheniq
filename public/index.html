@@ -167,7 +167,7 @@
 
     <script>
         const API_BASE = '';
-        const POLL_INTERVAL = 5000; // 5 seconds
+        const POLL_INTERVAL = 2000; // 2 seconds auto-update
         let pollInterval = null;
 
         // Fetch JSON
@@ -226,14 +226,62 @@
             document.getElementById('startMonitoring').style.display = mon ? 'none' : 'inline-block';
             document.getElementById('stopMonitoring').style.display = mon ? 'inline-block' : 'none';
 
-            // Last result
+            // Last result - display above the history table
             if (status.lastResult) {
-                const lr = status.lastResult;
-                document.getElementById('lastResultContent').innerHTML = 
-                    `Issue: ${lr.issueNumber}<br>Number: ${lr.number} 
-                     <span class="ball ${lr.color.toLowerCase()}">${lr.number}</span>
-                     ${lr.raceWindow ? '<strong style="color:#ff4444"> (RACE WINDOW!)</strong>' : ''}`;
+                displayLastResult(status.lastResult);
             }
+
+            // Race window alert
+            if (status.lastRaceWindow) {
+                displayRaceWindow(status.lastRaceWindow);
+            } else {
+                document.getElementById('raceWindowAlert').style.display = 'none';
+            }
+            
+            // Reload trend/history if available
+            if (status.history && status.history.length > 0) {
+                updateHistoryTable(status.history);
+            } else {
+                loadTrend();
+            }
+        }
+        
+        // Display last result prominently
+        function displayLastResult(lr) {
+            const container = document.getElementById('lastResultContent');
+            const colorClass = lr.color.toLowerCase();
+            container.innerHTML = 
+                `<div style="display: flex; align-items: center; gap: 15px; font-size: 1.2em;">
+                    <span>Latest Result:</span>
+                    <span class="ball ${colorClass}" style="width: 40px; height: 40px; line-height: 40px; font-size: 1.2em;">${lr.number}</span>
+                    <span><strong>${lr.color}</strong> | Issue: ${lr.issueNumber}</span>
+                    <span style="color: #888; font-size: 0.9em;">${new Date(lr.timestamp).toLocaleTimeString()}</span>
+                </div>`;
+        }
+        
+        // Display race window alert prominently
+        function displayRaceWindow(rw) {
+            document.getElementById('raceWindowAlert').style.display = 'block';
+            document.getElementById('raceWindowDetails').innerHTML = 
+                `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close | ${new Date(rw.timestamp).toLocaleTimeString()}`;
+        }
+        
+        // Update history table (newest first = at top)
+        function updateHistoryTable(history) {
+            const tbody = document.getElementById('historyTable');
+            tbody.innerHTML = history.slice().reverse().map((h, i) => {
+                const colorClass = h.color || (h.classify === 'violet' ? 'violet' : (h.number > 4 ? 'red' : 'green'));
+                return `<tr>
+                    <td>${i + 1}</td>
+                    <td>${h.issueNumber}</td>
+                    <td><span class="ball ${colorClass}">${h.number}</span></td>
+                    <td>${h.color || colorClass}</td>
+                    <td>${h.classify}</td>
+                    <td>${new Date(h.timestamp).toLocaleTimeString()}</td>
+                </tr>`;
+            }).join('');
+        }
+
 
             // Race window alert
             if (status.lastRaceWindow) {
