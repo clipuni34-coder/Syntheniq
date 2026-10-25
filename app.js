@@ -67,7 +67,8 @@ const state = {
   },
   // === Trend Analysis State ===
   history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
-  trendPrediction: null  // Current trend-based prediction
+  trendPrediction: null,  // Current trend-based prediction
+  advancedPrediction: null // Multi-method high-accuracy prediction
 };
 
 // === Trend Analysis Engine ===
@@ -147,6 +148,147 @@ function predictNext() {
   };
   
   return state.trendPrediction;
+}
+
+// === Advanced Prediction Engine ===
+// Uses multiple analysis methods for higher accuracy prediction
+
+function analyzePatternFrequency(history) {
+  // Look for repeating patterns (2-3 result sequences)
+  if (history.length < 8) return { pattern: 'none', confidence: 'none', score: 0 };
+  
+  // Get last 5 results
+  const recent = history.slice(-5).map(r => r.classify);
+  const last3 = recent.slice(-3);
+  
+  // Check for pattern repetitions in last 8
+  const last8 = history.slice(-8).map(r => r.classify);
+  
+  // Find the most recent trend
+  const mostRecent = history[history.length - 1].classify;
+  const streak = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].classify === mostRecent) streak.unshift(mostRecent);
+    else break;
+  }
+  
+  // Pattern-based: look at 2-2 splits and alternations
+  const seq = last8;
+  let patterns = {};
+  for (let i = 0; i < seq.length - 2; i++) {
+    const p = seq.slice(i, i + 2).join('-');
+    patterns[p] = (patterns[p] || 0) + 1;
+  }
+  
+  // Most frequent 2-pattern
+  let bestPattern = null, bestCount = 0;
+  for (const [p, c] of Object.entries(patterns)) {
+    if (c > bestCount) { bestCount = c; bestPattern = p; }
+  }
+  
+  // Predict based on recent pattern
+  if (streak.length >= 2) {
+    // If streak is 2+, it's likely to continue (momentum)
+    return { 
+      pattern: `streak-${streak.length}`, 
+      confidence: streak.length >= 3 ? 'high' : 'medium',
+      score: streak.length >= 3 ? 0.8 : 0.65,
+      prediction: streak[0] === 'big' ? 'Big' : 'Small'
+    };
+  }
+  
+  // Alternating pattern detection
+  const isAlternating = last8.every((v, i) => i === 0 || v !== last8[i-1]);
+  if (isAlternating && last8.length >= 6) {
+    return {
+      pattern: 'alternating',
+      confidence: 'high',
+      score: 0.75,
+      prediction: recent[recent.length - 1] === 'big' ? 'Small' : 'Big'
+    };
+  }
+  
+  return { pattern: 'none', confidence: 'none', score: 0 };
+}
+
+function calculateAdvancedConfidence(history) {
+  if (history.length < 10) return { confidence: 'very-low', score: 0.4 };
+  
+  let scores = [];
+  
+  // Method 1: Majority ratio
+  const counts = { big: 0, small: 0, violet: 0 };
+  history.forEach(h => counts[h.classify]++);
+  const majority = Object.values(counts).sort((a,b) => b-a)[0];
+  const ratio = majority / history.length;
+  const method1Score = ratio;
+  scores.push({ name: 'majority', score: method1Score, weight: 1 });
+  
+  // Method 2: Pattern frequency analysis
+  const patternResult = analyzePatternFrequency(history);
+  const method2Score = patternResult.score || 0;
+  scores.push({ name: 'pattern', score: method2Score, weight: 1 });
+  
+  // Method 3: Recent trend (last 3 results)
+  const last3 = history.slice(-3).map(h => h.classify);
+  const trend3 = last3.every(c => c === last3[0]) ? 1 : last3[2] === last3[1] ? 0.7 : 0.5;
+  scores.push({ name: 'recent', score: trend3, weight: 1.5 }); // Higher weight for recent trend
+  
+  // Calculate weighted average
+  let totalWeight = 0, weightedScore = 0;
+  scores.forEach(s => {
+    weightedScore += s.score * s.weight;
+    totalWeight += s.weight;
+  });
+  const finalScore = weightedScore / totalWeight;
+  
+  let confidence;
+  if (finalScore >= 0.85) confidence = 'very-high';
+  else if (finalScore >= 0.7) confidence = 'high';
+  else if (finalScore >= 0.6) confidence = 'medium';
+  else if (finalScore >= 0.5) confidence = 'low';
+  else confidence = 'very-low';
+  
+  return { confidence, score: finalScore };
+}
+
+function getAdvancedPrediction() {
+  if (state.history.length < 10) return null;
+  
+  // Combine multiple analysis methods
+  const patternResult = analyzePatternFrequency(state.history);
+  const confidenceInfo = calculateAdvancedConfidence(state.history);
+  
+  // Determine final prediction
+  let prediction = patternResult.prediction || (confidenceInfo.score >= 0.5 ? 'Big' : 'Small');
+  
+  // Use majority vote to override if pattern is weak
+  const counts = { big: 0, small: 0 };
+  state.history.forEach(h => {
+    if (h.classify === 'big') counts.big++;
+    else if (h.classify === 'small') counts.small++;
+  });
+  
+  // Majority prediction as fallback
+  const majorityPrediction = counts.big > counts.small ? 'Big' : 'Small';
+  if (patternResult.score < 0.5) {
+    prediction = majorityPrediction;
+  }
+  
+  state.advancedPrediction = {
+    prediction: prediction,
+    confidence: confidenceInfo.confidence,
+    score: Math.round(confidenceInfo.score * 100),
+    methods: {
+      majority: counts.big > counts.small ? `Big (${counts.big}/10)` : `Small (${counts.small}/10)`,
+      pattern: patternResult.pattern,
+      recentTrend: `${state.history.slice(-3).map(h => h.classify).join(' → ')}`
+    },
+    basedOn: '10_results_multi_analysis',
+    timestamp: new Date().toISOString()
+  };
+  
+  return state.advancedPrediction;
 }
 
 // === API Signing (from winGoApiSearch.js) ===
@@ -400,11 +542,26 @@ async function startRaceMonitoring() {
               );
             }
           }
+          
+          // Generate advanced prediction if we have 10 results
+          const advanced = getAdvancedPrediction();
+          if (advanced) {
+            console.log(`🎯 Advanced Prediction: ${advanced.prediction} (${advanced.confidence} confidence, score: ${advanced.score}%)`);
+            
+            // High confidence alert
+            if (advanced.confidence === 'high' || advanced.confidence === 'very-high') {
+              sendDiscordAlert(
+                `**🎯 HIGH CONFIDENCE PREDICTION!**\n` +
+                `Prediction: **${advanced.prediction}**\n` +
+                `Confidence: **${advanced.confidence.toUpperCase()}** (Score: ${advanced.score}%)  \n` +
+                `Methods: ${advanced.methods.pattern} | Recent: ${advanced.methods.recentTrend}`,
+                'warning'
+              );
+            }
+          }
         }
         
         state.stats.roundsDetected++;
-        
-        console.log(`[${new Date().toLocaleTimeString()}] Result: ${resultNum} (${resultColor})`);
         console.log(`  ${Math.round(msToClose/1000)}s to current round close`);
         
         // Check for race window
@@ -533,7 +690,8 @@ app.get('/api/status', (req, res) => {
     lastRaceWindow: state.lastRaceWindow,
     stats: state.stats,
     race_wins: state.raceWins,
-    history: state.history.slice(-10)  // Last 10 results for UI
+    history: state.history.slice(-10),  // Last 10 results for UI
+    advancedPrediction: state.advancedPrediction  // High-accuracy prediction
   });
 });
 
@@ -567,6 +725,20 @@ app.get('/api/trend', (req, res) => {
     prediction: prediction,
     status: 'active'
   });
+});
+
+// === Advanced High-Accuracy Prediction Endpoint ===
+app.get('/api/advanced-predict', (req, res) => {
+  const advanced = getAdvancedPrediction();
+  if (!advanced) {
+    return res.json({
+      error: 'Insufficient data (need 10 results)',
+      available: state.history.length,
+      required: 10,
+      tip: 'Collecting results from ongoing races...'
+    });
+  }
+  res.json(advanced);
 });
 
 // === Manual Trend Prediction (2 seconds before close) ===

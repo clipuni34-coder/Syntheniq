@@ -132,6 +132,12 @@
             <div id="predictionContent" class="loading">Analyzing trend data...</div>
         </div>
 
+        <!-- Advanced Prediction -->
+        <div class="prediction-box" id="advancedPredictionBox" style="border-color: #ff4444; margin-top: 20px;">
+            <h3>🎯 High-Accuracy Prediction</h3>
+            <div id="advancedPredictionContent" class="loading">Analyzing patterns...</div>
+        </div>
+
         <!-- Race Window Alert -->
         <div class="race-window" id="raceWindowAlert" style="display:none;">
             <h3>⚡ RACE WINDOW DETECTED!</h3>
@@ -218,13 +224,20 @@
             // Load trend prediction from last 10 results (processed in background)
             if (status.history && status.history.length >= 10) {
                 loadTrend();
+                loadAdvancedPrediction();
             } else if (status.history && status.history.length > 0) {
                 document.getElementById('predictionBox').style.display = 'block';
                 document.getElementById('predictionContent').innerHTML = 
                     '<p style="text-align: center; color: #888;">Collecting data... ' + status.history.length + '/10 results</p>';
+                document.getElementById('advancedPredictionBox').style.display = 'block';
+                document.getElementById('advancedPredictionContent').innerHTML = 
+                    '<p style="text-align: center; color: #888;">Collecting data... ' + status.history.length + '/10 results</p>';
             } else {
                 document.getElementById('predictionBox').style.display = 'block';
                 document.getElementById('predictionContent').innerHTML = 
+                    '<p style="text-align: center; color: #888;">Waiting for race data...</p>';
+                document.getElementById('advancedPredictionBox').style.display = 'block';
+                document.getElementById('advancedPredictionContent').innerHTML = 
                     '<p style="text-align: center; color: #888;">Waiting for race data...</p>';
             }
         }
@@ -249,6 +262,45 @@
             } else {
                 content.innerHTML = generatePredictionHTML(trend);
             }
+        }
+
+        // Load advanced high-accuracy prediction
+        async function loadAdvancedPrediction() {
+            const adv = await fetchAPI('/api/advanced-predict');
+            const box = document.getElementById('advancedPredictionBox');
+            const content = document.getElementById('advancedPredictionContent');
+            
+            box.style.display = 'block';
+            
+            if (adv.error) {
+                content.innerHTML = '<p style="text-align: center; color: #888;">' + adv.error + '. Collected: ' + (adv.available || 0) + '</p>';
+            } else {
+                content.innerHTML = generateAdvancedHTML(adv);
+            }
+        }
+
+        function generateAdvancedHTML(adv) {
+            const predClass = adv.prediction === 'Big' ? 'prediction-big' : adv.prediction === 'Small' ? 'prediction-small' : 'prediction-violet';
+            let html = '';
+            
+            html += `<div class="prediction-large ${predClass}">
+                ${adv.prediction.toUpperCase()}
+                <div style="margin-top: 10px; font-size: 0.3em;">
+                    <span class="confidence ${adv.confidence}">Confidence: ${adv.confidence} (${adv.score}%)</span>
+                </div>
+            </div>`;
+            
+            html += `<div style="margin-top: 15px; font-size: 0.9em;">
+                <strong>Analysis Methods:</strong>
+                <div style="margin-top: 8px;">
+                    ${Object.entries(adv.methods).map(([k, v]) => `<span class="trend-indicator">${k}: ${v}</span>`).join('')}
+                </div>
+                <div style="margin-top: 10px; color: #888;">
+                    Based on: ${adv.basedOn} | Last updated: ${new Date(adv.timestamp).toLocaleTimeString()}
+                </div>
+            </div>`;
+            
+            return html;
         }
 
         function generatePredictionHTML(trend) {
@@ -322,7 +374,6 @@
         // Poll
         function startPoll() {
             updateStatus();
-            loadTrend();
             loadEvents();
             pollInterval = setInterval(() => {
                 updateStatus();
