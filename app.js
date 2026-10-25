@@ -501,6 +501,16 @@ async function executeRaceBets(color, issueNumber) {
 }
 
 // === Express Routes ===
+app.get('/', (req, res) => {
+  res.json({
+    name: 'WinGo Racer',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: ['/health', '/api/status', '/api/events', '/api/trend'],
+    dashboard: 'https://wingo-racer.onrender.com/health'
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
