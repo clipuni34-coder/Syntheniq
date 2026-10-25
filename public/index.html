@@ -281,19 +281,6 @@
                 </tr>`;
             }).join('');
         }
-
-
-            // Race window alert
-            if (status.lastRaceWindow) {
-                const rw = status.lastRaceWindow;
-                document.getElementById('raceWindowAlert').style.display = 'block';
-                document.getElementById('raceWindowDetails').innerHTML = 
-                    `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close`;
-            } else {
-                document.getElementById('raceWindowAlert').style.display = 'none';
-            }
-        }
-
         // Load history/trend
         async function loadTrend() {
             const trend = await fetchAPI('/api/trend');
