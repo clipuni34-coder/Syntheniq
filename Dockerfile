@@ -1,7 +1,7 @@
 FROM node:18-alpine
 
 # Install Chromium and required dependencies for headless puppeteer
-# Using Alpine package names with -dev suffixes for development headers
+# Fixed Alpine package names for node:18-alpine (Alpine 3.18)
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
+    ttf-dejavu \
     fontconfig \
     libstdc++ \
     cups \
@@ -23,16 +24,15 @@ RUN apk add --no-cache \
     xvfb \
     gtk+3.0 \
     alsa-lib \
-    atk-dev \
+    atk \
     libxcomposite \
     libxdamage \
     libxfixes \
     libxrandr \
     libgbm \
-    pango-dev \
-    cairo-dev \
-    mesa-gl-dev \
-    ttf-dejavu \
+    pango \
+    cairo \
+    mesa-dev \
     nss-dev
 
 # Tell puppeteer to use the system Chromium
