@@ -69,7 +69,9 @@ const state = {
   history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
   trendPrediction: null,  // Current trend-based prediction
   advancedPrediction: null, // Multi-method high-accuracy prediction
-  predictedForIssue: {}   // Track which issues we've predicted for (prevents duplicate bets)
+  predictedForIssue: {},  // Track which issues we've predicted for (prevents duplicate bets)
+  earlyLeaks: [],        // Early leaked results before countdown completes
+  lastEarlyLeakNumber: null  // Track last number from GetLastFiveIssueNumberResult
 };
 
 // === Trend Analysis Engine ===
@@ -595,9 +597,8 @@ async function startRaceMonitoring() {
             if (latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum) && isNewNumber) {
               state.lastEarlyLeakNumber = latestNum;
               
-              // This is an early leak but for a PREVIOUS round (not current)
-              // We can use it for pattern prediction
-              earlyLeak = {
+              // Store the early leak for UI display
+              const leakInfo = {
                 number: latestNum,
                 color: numberToColor(latestNum),
                 msToClose: msToClose,
@@ -605,7 +606,11 @@ async function startRaceMonitoring() {
                 timestamp: new Date().toISOString(),
                 forPreviousRound: true
               };
-              console.log(`🚨 EARLY LEAK (API): ${latestNum} (${numberToColor(latestNum)}) ${Math.round(msToClose/1000)}s before close - PREVIOUS round result (pattern use)`);
+              state.earlyLeaks.push(leakInfo);
+              if (state.earlyLeaks.length > 20) state.earlyLeaks.shift();
+              
+              earlyLeak = leakInfo;
+              console.log(`🚨 EARLY LEAK (API): ${latestNum} (${numberToColor(latestNum)}) ${Math.round(msToClose/1000)}s before close`);
             }
           }
         } catch(e) {
@@ -808,7 +813,8 @@ app.get('/api/status', (req, res) => {
     stats: state.stats,
     race_wins: state.raceWins,
     history: state.history.slice(-10),  // Last 10 results for UI
-    advancedPrediction: state.advancedPrediction  // High-accuracy prediction
+    advancedPrediction: state.advancedPrediction,  // High-accuracy prediction
+    earlyLeaks: state.earlyLeaks.slice(-20)  // Early leaked results before countdown ends
   });
 });
 

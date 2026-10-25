@@ -126,6 +126,12 @@
             <button class="btn" onclick="refreshJwt()">Refresh JWT</button>
         </div>
 
+        <!-- Early Leak Results -->
+        <div class="prediction-box" id="earlyLeakBox" style="background: #1a1a2e; border: 2px solid #ff4444;">
+            <h3>🚨 Early Leaked Results</h3>
+            <div id="earlyLeakContent" class="loading">No early leaks detected yet</div>
+        </div>
+
         <!-- Prediction -->
         <div class="prediction-box" id="predictionBox">
             <h3>📊 Next Prediction (Big/Small)</h3>
@@ -240,6 +246,15 @@
                 document.getElementById('advancedPredictionContent').innerHTML = 
                     '<p style="text-align: center; color: #888;">Waiting for race data...</p>';
             }
+            
+            // Update early leaks display
+            if (status.earlyLeaks && status.earlyLeaks.length > 0) {
+                updateEarlyLeaks(status.earlyLeaks);
+            } else {
+                document.getElementById('earlyLeakBox').style.display = 'block';
+                document.getElementById('earlyLeakContent').innerHTML = 
+                    '<p style="text-align: center; color: #888;">Waiting for early leaks...</p>';
+            }
         }
         
         // Display race window alert
@@ -247,6 +262,43 @@
             document.getElementById('raceWindowAlert').style.display = 'block';
             document.getElementById('raceWindowDetails').innerHTML = 
                 `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close | ${new Date(rw.timestamp).toLocaleTimeString()}`;
+        }
+        
+        // Update early leaks display
+        function updateEarlyLeaks(leaks) {
+            const box = document.getElementById('earlyLeakBox');
+            const content = document.getElementById('earlyLeakContent');
+            box.style.display = 'block';
+            
+            // Show the most recent leak prominently
+            if (leaks.length > 0) {
+                const latest = leaks[leaks.length - 1];
+                const colorClass = latest.color.toLowerCase();
+                content.innerHTML = `
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <div style="font-size: 1.5em; color: #ff4444;">⚡ EARLY LEAK DETECTED</div>
+                        <div style="margin-top: 10px;">
+                            <span class="ball ${colorClass}" style="width: 50px; height: 50px; line-height: 50px; font-size: 1.5em;">${latest.number}</span>
+                            <span style="font-size: 1.5em; color: ${colorClass === 'red' ? '#ff4444' : colorClass === 'green' ? '#00ff88' : '#aa55ff'}">
+                                <strong>${latest.color}</strong>
+                            </span>
+                        </div>
+                        <div style="color: #888; margin-top: 8px; font-size: 0.9em;">
+                            ${Math.round(latest.msToClose/1000)}s before countdown ends | ${new Date(latest.timestamp).toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85em;">
+                        ${leaks.slice().reverse().map(l => 
+                            `<div style="padding: 5px; border-bottom: 1px solid #222;">
+                                <span style="color: #ff4444;">[${l.color}]</span> ${l.number} — ${Math.round(l.msToClose/1000)}s before close — ${new Date(l.timestamp).toLocaleTimeString()}
+                            </div>`
+                        ).join('')}
+                    </div>
+                `;
+            } else {
+                content.innerHTML = '<p style="text-align: center; color: #888;">No early leaks yet</p>';
+            }
+        }
         }
         
         // Load trend prediction
