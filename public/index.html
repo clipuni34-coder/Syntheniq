@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinGo Racer Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a1a; color: #e0e0ff; overflow-x: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%); padding: 20px; border-bottom: 2px solid #4a4a8a; }
+        header h1 { color: #00ff88; font-size: 1.8em; }
+        header .subtitle { color: #888; margin-top: 5px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
+        .card { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card h3 { color: #4a90d9; margin-bottom: 10px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #00ff88; }
+        .stat-value.warning { color: #ffaa00; }
+        .stat-value.danger { color: #ff4444; }
+        .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }
+        .status-running { background: #00ff88; color: #0a0a1a; }
+        .status-idle { background: #666; color: #fff; }
+        .status-error { background: #ff4444; color: #fff; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2a2a4a; }
+        th { color: #4a90d9; font-weight: normal; }
+        .ball { width: 30px; height: 30px; border-radius: 50%; display: inline-block; margin: 0 5px; line-height: 30px; }
+        .ball.red { background: radial-gradient(circle, #ff5555, #cc0000); color: white; }
+        .ball.green { background: radial-gradient(circle, #55ff55, #00cc00); color: #0a0a1a; }
+        .ball.violet { background: radial-gradient(circle, #aa55ff, #7700cc); color: white; }
+        .prediction-box { background: #1a1a2e; border: 2px solid #4a4a8a; border-radius: 10px; padding: 20px; margin: 20px 0; }
+        .prediction-box h3 { color: #00ff88; }
+        .confidence { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.8em; }
+        .confidence.high { background: #00ff88; color: #0a0a1a; }
+        .confidence.medium { background: #ffaa00; color: #0a0a1a; }
+        .confidence.low { background: #cc8800; color: #0a0a1a; }
+        .confidence.very-low { background: #ff4444; color: white; }
+        .controls { margin: 15px 0; }
+        .btn { background: #4a4a8a; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-size: 0.9em; }
+        .btn:hover { background: #5a5aaa; }
+        .btn.start { background: #00aa44; }
+        .btn.start:hover { background: #00cc55; }
+        .btn.stop { background: #aa4400; }
+        .btn.stop:hover { background: #cc5500; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .events-log { background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85em; }
+        .event { border-bottom: 1px solid #222; padding: 8px 0; }
+        .event .time { color: #666; }
+        .event .message { color: #e0e0ff; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .race-window { background: linear-gradient(135deg, #4a1a1a, #8a2a2a); border: 2px solid #ff4444; border-radius: 10px; padding: 20px; margin: 20px 0; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+        .race-window h3 { color: #ff4444; }
+        .jwt-status { display: flex; align-items: center; gap: 10px; }
+        .jwt-indicator { width: 10px; height: 10px; border-radius: 50%; }
+        .jwt-valid { background: #00ff88; }
+        .jwt-invalid { background: #ff4444; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🎯 WinGo Racer Dashboard</h1>
+            <div class="subtitle">Race Condition Monitor for WinGo 30s Draws</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Status Cards -->
+        <div class="grid">
+            <div class="card">
+                <h3>Service Status</h3>
+                <div id="serviceStatus">
+                    <span class="status-badge status-idle" id="statusBadge">Loading...</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>JWT Auth</h3>
+                <div class="jwt-status">
+                    <span class="jwt-indicator" id="jwtIndicator"></span>
+                    <span id="jwtExpiry">Checking...</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Rounds Detected</h3>
+                <div class="stat-value" id="roundsDetected">0</div>
+            </div>
+            <div class="card">
+                <h3>Race Windows</h3>
+                <div class="stat-value warning" id="raceWindows">0</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Bets Placed</h3>
+                <div class="stat-value" id="betsPlaced">0</div>
+            </div>
+            <div class="card">
+                <h3>Wins</h3>
+                <div class="stat-value" id="wins">0</div>
+            </div>
+            <div class="card">
+                <h3>Losses</h3>
+                <div class="stat-value danger" id="losses">0</div>
+            </div>
+            <div class="card">
+                <h3>Monitoring</h3>
+                <div class="stat-value" id="monitoringStatus">Inactive</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn start" id="startMonitoring" onclick="startMonitoring()">Start Monitoring</button>
+            <button class="btn stop" id="stopMonitoring" onclick="stopMonitoring()" style="display:none;">Stop Monitoring</button>
+            <button class="btn" onclick="refreshJwt()">Refresh JWT</button>
+            <button class="btn" onclick="loadTrend()">Run Trend Analysis</button>
+        </div>
+
+        <!-- Prediction -->
+        <div class="prediction-box" id="predictionBox" style="display:none;">
+            <h3>📊 Trend Prediction</h3>
+            <div id="predictionContent"></div>
+        </div>
+
+        <!-- Last Result -->
+        <div class="card" id="lastResultCard">
+            <h3>Last Result</h3>
+            <div id="lastResultContent" class="loading">No results yet</div>
+        </div>
+
+        <!-- Race Window Alert -->
+        <div class="race-window" id="raceWindowAlert" style="display:none;">
+            <h3>⚡ RACE WINDOW DETECTED!</h3>
+            <div id="raceWindowDetails"></div>
+        </div>
+
+        <!-- Last 10 Results -->
+        <div class="card">
+            <h3>Last 10 Results</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Issue Number</th>
+                        <th>Number</th>
+                        <th>Color</th>
+                        <th>Classification</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTable">
+                    <tr><td colspan="6" class="loading">No data yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Events Log -->
+        <div class="card">
+            <h3>Recent Events</h3>
+            <div class="events-log" id="eventsLog">
+                <div class="event"><span class="time">[Init]</span> <span class="message">Waiting for data...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        const POLL_INTERVAL = 5000; // 5 seconds
+        let pollInterval = null;
+
+        // Fetch JSON
+        async function fetchAPI(path, method = 'GET', data = null) {
+            try {
+                const opts = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                if (data) opts.body = JSON.stringify(data);
+                const res = await fetch(API_BASE + path, opts);
+                return await res.json();
+            } catch(e) {
+                return { error: e.message };
+            }
+        }
+
+        // Update UI from status
+        async function updateStatus() {
+            const status = await fetchAPI('/api/status');
+            
+            if (status.error) {
+                document.getElementById('statusBadge').textContent = 'Connection Error';
+                document.getElementById('statusBadge').className = 'status-badge status-error';
+                return;
+            }
+
+            // Service running
+            document.getElementById('statusBadge').textContent = 'Running';
+            document.getElementById('statusBadge').className = 'status-badge status-running';
+
+            // JWT status
+            const jwtValid = status.jwt_valid;
+            const jwtInd = document.getElementById('jwtIndicator');
+            jwtInd.className = 'jwt-indicator ' + (jwtValid ? 'jwt-valid' : 'jwt-invalid');
+            if (status.jwt_expires) {
+                const exp = new Date(status.jwt_expires);
+                const now = new Date();
+                const minsLeft = Math.round((exp - now) / 60000);
+                document.getElementById('jwtExpiry').textContent = 
+                    `Expires in ${minsLeft} min (${minsLeft < 5 ? '⚠️' : '✓'})`;
+            } else {
+                document.getElementById('jwtExpiry').textContent = 'Not configured';
+            }
+
+            // Stats
+            document.getElementById('roundsDetected').textContent = status.stats.roundsDetected || 0;
+            document.getElementById('raceWindows').textContent = status.stats.raceWindowsFound || 0;
+            document.getElementById('betsPlaced').textContent = status.stats.betsPlaced || 0;
+            document.getElementById('wins').textContent = status.stats.wins || 0;
+            document.getElementById('losses').textContent = status.stats.losses || 0;
+
+            // Monitoring
+            const mon = status.monitoring;
+            document.getElementById('monitoringStatus').textContent = mon ? 'Active' : 'Inactive';
+            document.getElementById('startMonitoring').style.display = mon ? 'none' : 'inline-block';
+            document.getElementById('stopMonitoring').style.display = mon ? 'inline-block' : 'none';
+
+            // Last result
+            if (status.lastResult) {
+                const lr = status.lastResult;
+                document.getElementById('lastResultContent').innerHTML = 
+                    `Issue: ${lr.issueNumber}<br>Number: ${lr.number} 
+                     <span class="ball ${lr.color.toLowerCase()}">${lr.number}</span>
+                     ${lr.raceWindow ? '<strong style="color:#ff4444"> (RACE WINDOW!)</strong>' : ''}`;
+            }
+
+            // Race window alert
+            if (status.lastRaceWindow) {
+                const rw = status.lastRaceWindow;
+                document.getElementById('raceWindowAlert').style.display = 'block';
+                document.getElementById('raceWindowDetails').innerHTML = 
+                    `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close`;
+            } else {
+                document.getElementById('raceWindowAlert').style.display = 'none';
+            }
+        }
+
+        // Load history/trend
+        async function loadTrend() {
+            const trend = await fetchAPI('/api/trend');
+            const box = document.getElementById('predictionBox');
+            const content = document.getElementById('predictionContent');
+            
+            if (trend.error || trend.error) {
+                content.innerHTML = '<p>Not enough data yet (need 10 results). Collected: ' + (trend.available || 0) + '</p>';
+            } else {
+                content.innerHTML = generatePredictionHTML(trend);
+            }
+            box.style.display = 'block';
+        }
+
+        function generatePredictionHTML(trend) {
+            const p = trend.prediction;
+            const a = trend.trendAnalysis;
+            let html = '';
+            
+            if (p) {
+                html += `<div style="margin-bottom: 15px;">
+                    <strong>Prediction: ${p.prediction}</strong> 
+                    <span class="confidence ${p.confidence}">Confidence: ${p.confidence}</span>
+                </div>`;
+            }
+            
+            html += `<div>
+                <strong>Trend: ${a.trend}</strong> | 
+                Streak: ${a.streakLength} (${a.streak.join(' → ')})
+                <br>Big: ${a.last10.big} | Small: ${a.last10.small} | Violet: ${a.last10.violet}
+            </div>`;
+            
+            if (trend.history) {
+                html += '<table style="margin-top: 10px;"><thead><tr><th>Issue</th><th>Num</th><th>Type</th></tr></thead><tbody>';
+                trend.history.forEach(h => {
+                    html += `<tr>
+                        <td>${h.issueNumber?.substring(8) || h.issueNumber}</td>
+                        <td><span class="ball ${h.color || (h.classify==='violet'?'violet':(h.number>4?'red':'green'))}">${h.number}</span></td>
+                        <td>${h.classify}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            
+            return html;
+        }
+
+        // Load events
+        async function loadEvents() {
+            const res = await fetchAPI('/api/events');
+            const log = document.getElementById('eventsLog');
+            
+            if (res.events && res.events.length > 0) {
+                log.innerHTML = res.events.map(e => 
+                    `<div class="event"><span class="time">[${new Date(e.timestamp).toLocaleTimeString()}]</span> <span class="message">${e.message || JSON.stringify(e)}</span></div>`
+                ).join('');
+            } else {
+                log.innerHTML = '<div class="event"><span class="time">[$(new Date().toLocaleTimeString())]</span> <span class="message">No events yet</span></div>';
+            }
+        }
+
+        // Actions
+        async function startMonitoring() {
+            await fetchAPI('/api/start-monitoring', 'POST');
+            document.getElementById('startMonitoring').style.display = 'none';
+            document.getElementById('stopMonitoring').style.display = 'inline-block';
+        }
+
+        async function stopMonitoring() {
+            await fetchAPI('/api/stop-monitoring', 'POST');
+            document.getElementById('startMonitoring').style.display = 'inline-block';
+            document.getElementById('stopMonitoring').style.display = 'none';
+        }
+
+        async function refreshJwt() {
+            const res = await fetchAPI('/api/refresh-jwt', 'POST');
+            alert('JWT refresh: ' + (res.success ? 'Success' : 'Failed'));
+            updateStatus();
+        }
+
+        // Poll
+        function startPoll() {
+            updateStatus();
+            pollInterval = setInterval(updateStatus, POLL_INTERVAL);
+        }
+
+        // Initial load
+        startPoll();
+    </script>
+</body>
+</html>

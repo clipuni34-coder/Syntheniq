@@ -34,6 +34,21 @@ const FB999_JWT = process.env.FB999_JWT || null; // Can set JWT via env var
 const app = express();
 app.use(express.json());
 
+// Serve static dashboard from public/
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    name: 'WinGo Racer',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: ['/health', '/api/status', '/api/events', '/api/trend'],
+    dashboard: 'https://wingo-racer.onrender.com/'
+  });
+});
+
 // === State Management ===
 const state = {
   jwt: null,
