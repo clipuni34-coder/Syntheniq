@@ -1,6 +1,7 @@
 FROM node:18-alpine
 
 # Install Chromium and required dependencies for headless puppeteer
+# Using Alpine package names with -dev suffixes for development headers
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -30,7 +31,9 @@ RUN apk add --no-cache \
     libgbm \
     pango-dev \
     cairo-dev \
-    mesa-gl-dev
+    mesa-gl-dev \
+    ttf-dejavu \
+    nss-dev
 
 # Tell puppeteer to use the system Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
