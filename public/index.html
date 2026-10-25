@@ -281,12 +281,21 @@
 
         function generateAdvancedHTML(adv) {
             const predClass = adv.prediction === 'Big' ? 'prediction-big' : adv.prediction === 'Small' ? 'prediction-small' : 'prediction-violet';
+            const colorClass = adv.color ? adv.color.toLowerCase() : '';
             let html = '';
             
-            html += `<div class="prediction-large ${predClass}">
-                ${adv.prediction.toUpperCase()}
-                <div style="margin-top: 10px; font-size: 0.3em;">
-                    <span class="confidence ${adv.confidence}">Confidence: ${adv.confidence} (${adv.score}%)</span>
+            html += `<div style="text-align: center;">
+                <div class="prediction-large ${predClass}" style="font-size: 2.5em; padding: 15px;">
+                    ${adv.prediction.toUpperCase()}
+                    <div style="margin-top: 8px; font-size: 0.35em;">
+                        <span class="confidence ${adv.confidence}">Confidence: ${adv.confidence} (${adv.score}%)</span>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 1.3em;">
+                    <strong>Color:</strong> 
+                    <span class="ball ${colorClass}" style="width: 35px; height: 35px; line-height: 35px;">●</span>
+                    <span style="color: ${colorClass === 'red' ? '#ff4444' : colorClass === 'green' ? '#00ff88' : '#aa55ff'}">${adv.color || 'Unknown'}</span>
+                    <span style="color: #888; font-size: 0.8em;">(${adv.colorConfidence || 'low'})</span>
                 </div>
             </div>`;
             

@@ -253,12 +253,74 @@ function calculateAdvancedConfidence(history) {
   return { confidence, score: finalScore };
 }
 
+function predictColor(history) {
+  // Analyze color patterns from last 10 results
+  if (history.length < 5) return null;
+  
+  const colors = history.map(h => h.color?.toLowerCase() || '');
+  const recentColors = colors.slice(-5);
+  
+  // Count frequency
+  const counts = { red: 0, green: 0, violet: 0 };
+  colors.forEach(c => {
+    if (c === 'red') counts.red++;
+    else if (c === 'green') counts.green++;
+    else if (c === 'violet') counts.violet++;
+  });
+  
+  // Check for streaks
+  const lastColor = recentColors[recentColors.length - 1];
+  let streak = 0;
+  for (let i = recentColors.length - 1; i >= 0; i--) {
+    if (recentColors[i] === lastColor) streak++;
+    else break;
+  }
+  
+  // Pattern analysis
+  let prediction = null;
+  let confidence = 0;
+  
+  // If strong color dominance
+  if (counts.red >= 6) { prediction = 'Red'; confidence = 0.7; }
+  else if (counts.green >= 6) { prediction = 'Green'; confidence = 0.7; }
+  else if (counts.violet >= 3) { prediction = 'Violet'; confidence = 0.65; }
+  
+  // Streak continuation
+  if (streak >= 3 && lastColor) {
+    prediction = lastColor === 'red' ? 'Red' : lastColor === 'green' ? 'Green' : 'Violet';
+    confidence = Math.max(confidence, 0.75);
+  }
+  
+  // Alternation pattern
+  const isAlternating = recentColors.length >= 4 && recentColors.every((c, i) => i === 0 || c !== recentColors[i-1]);
+  if (isAlternating) {
+    prediction = recentColors[recentColors.length - 1] === 'red' ? 'Green' : 'Red';
+    confidence = Math.max(confidence, 0.72);
+  }
+  
+  if (!prediction) {
+    // Default to the most frequent
+    const max = Math.max(counts.red, counts.green, counts.violet);
+    if (counts.red === max) prediction = 'Red';
+    else if (counts.green === max) prediction = 'Green';
+    else prediction = 'Violet';
+    confidence = 0.5;
+  }
+  
+  return {
+    color: prediction,
+    confidence: confidence >= 0.75 ? 'high' : confidence >= 0.65 ? 'medium' : 'low',
+    score: Math.round(confidence * 100)
+  };
+}
+
 function getAdvancedPrediction() {
   if (state.history.length < 10) return null;
   
   // Combine multiple analysis methods
   const patternResult = analyzePatternFrequency(state.history);
   const confidenceInfo = calculateAdvancedConfidence(state.history);
+  const colorPrediction = predictColor(state.history);
   
   // Determine final prediction
   let prediction = patternResult.prediction || (confidenceInfo.score >= 0.5 ? 'Big' : 'Small');
@@ -278,6 +340,9 @@ function getAdvancedPrediction() {
   
   state.advancedPrediction = {
     prediction: prediction,
+    color: colorPrediction ? colorPrediction.color : 'Unknown',
+    colorConfidence: colorPrediction ? colorPrediction.confidence : 'low',
+    colorScore: colorPrediction ? colorPrediction.score : 0,
     confidence: confidenceInfo.confidence,
     score: Math.round(confidenceInfo.score * 100),
     methods: {
