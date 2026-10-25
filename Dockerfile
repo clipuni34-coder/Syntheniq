@@ -20,17 +20,17 @@ RUN apk add --no-cache \
     libxkbcommon-x11 \
     xorg-server-xvfb \
     xvfb \
-    gtk+3 \
+    gtk+3.0 \
     alsa-lib \
-    atk \
+    atk-dev \
     libxcomposite \
     libxdamage \
     libxfixes \
     libxrandr \
     libgbm \
-    libpango \
-    cairo \
-    mesa-gl
+    pango-dev \
+    cairo-dev \
+    mesa-gl-dev
 
 # Tell puppeteer to use the system Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
