@@ -1,9 +1,10 @@
 FROM node:18-alpine
 
-# Install Chromium and required dependencies for headless puppeteer
+# Install Chromium and ALL required shared libraries for headless puppeteer
 RUN apk add --no-cache \
     chromium \
     nss \
+    nspr \
     freetype \
     freetype-dev \
     harfbuzz \
@@ -11,9 +12,10 @@ RUN apk add --no-cache \
     ttf-freefont \
     fontconfig \
     libstdc++ \
-    nspr \
     cups-libs \
     dbus-libs \
+    libdrm \
+    libxcb \
     libxkbcommon \
     libxkbcommon-x11 \
     xorg-server-xvfb \
