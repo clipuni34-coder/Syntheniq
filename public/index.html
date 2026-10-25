@@ -55,13 +55,21 @@
         .jwt-indicator { width: 10px; height: 10px; border-radius: 50%; }
         .jwt-valid { background: #00ff88; }
         .jwt-invalid { background: #ff4444; }
+        .trend-indicator { display: inline-block; padding: 5px 15px; border-radius: 8px; font-weight: bold; margin: 3px; }
+        .trend-big { background: #4a4a8a; color: #00ff88; }
+        .trend-small { background: #4a4a8a; color: #ffaa00; }
+        .trend-violet { background: #4a4a8a; color: #aa55ff; }
+        .prediction-large { font-size: 2.5em; font-weight: bold; text-align: center; padding: 20px; }
+        .prediction-big { color: #00ff88; }
+        .prediction-small { color: #ffaa00; }
+        .prediction-violet { color: #aa55ff; }
     </style>
 </head>
 <body>
     <header>
         <div class="container">
             <h1>🎯 WinGo Racer Dashboard</h1>
-            <div class="subtitle">Race Condition Monitor for WinGo 30s Draws</div>
+            <div class="subtitle">Trend Prediction & Race Window Monitor</div>
         </div>
     </header>
 
@@ -86,16 +94,12 @@
                 <div class="stat-value" id="roundsDetected">0</div>
             </div>
             <div class="card">
-                <h3>Race Windows</h3>
-                <div class="stat-value warning" id="raceWindows">0</div>
+                <h3>Bets Placed</h3>
+                <div class="stat-value" id="betsPlaced">0</div>
             </div>
         </div>
 
         <div class="grid">
-            <div class="card">
-                <h3>Bets Placed</h3>
-                <div class="stat-value" id="betsPlaced">0</div>
-            </div>
             <div class="card">
                 <h3>Wins</h3>
                 <div class="stat-value" id="wins">0</div>
@@ -108,6 +112,10 @@
                 <h3>Monitoring</h3>
                 <div class="stat-value" id="monitoringStatus">Inactive</div>
             </div>
+            <div class="card">
+                <h3>Race Windows</h3>
+                <div class="stat-value warning" id="raceWindows">0</div>
+            </div>
         </div>
 
         <!-- Controls -->
@@ -115,19 +123,12 @@
             <button class="btn start" id="startMonitoring" onclick="startMonitoring()">Start Monitoring</button>
             <button class="btn stop" id="stopMonitoring" onclick="stopMonitoring()" style="display:none;">Stop Monitoring</button>
             <button class="btn" onclick="refreshJwt()">Refresh JWT</button>
-            <button class="btn" onclick="loadTrend()">Run Trend Analysis</button>
         </div>
 
         <!-- Prediction -->
-        <div class="prediction-box" id="predictionBox" style="display:none;">
-            <h3>📊 Trend Prediction</h3>
-            <div id="predictionContent"></div>
-        </div>
-
-        <!-- Last Result -->
-        <div class="card" id="lastResultCard">
-            <h3>Last Result</h3>
-            <div id="lastResultContent" class="loading">No results yet</div>
+        <div class="prediction-box" id="predictionBox">
+            <h3>📊 Next Prediction (Big/Small)</h3>
+            <div id="predictionContent" class="loading">Analyzing trend data...</div>
         </div>
 
         <!-- Race Window Alert -->
@@ -136,22 +137,22 @@
             <div id="raceWindowDetails"></div>
         </div>
 
-        <!-- Last 10 Results -->
+        <!-- Winning Numbers (Last 10) -->
         <div class="card">
-            <h3>Last 10 Results</h3>
+            <h3>Winning Numbers (Last 10 Rounds)</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>#</th>
+                        <th>Round</th>
                         <th>Issue Number</th>
                         <th>Number</th>
                         <th>Color</th>
-                        <th>Classification</th>
+                        <th>Big/Small</th>
                         <th>Time</th>
                     </tr>
                 </thead>
-                <tbody id="historyTable">
-                    <tr><td colspan="6" class="loading">No data yet</td></tr>
+                <tbody id="winningNumbersTable">
+                    <tr><td colspan="6" class="loading">No winning numbers yet</td></tr>
                 </tbody>
             </table>
         </div>
@@ -226,11 +227,6 @@
             document.getElementById('startMonitoring').style.display = mon ? 'none' : 'inline-block';
             document.getElementById('stopMonitoring').style.display = mon ? 'inline-block' : 'none';
 
-            // Last result - display above the history table
-            if (status.lastResult) {
-                displayLastResult(status.lastResult);
-            }
-
             // Race window alert
             if (status.lastRaceWindow) {
                 displayRaceWindow(status.lastRaceWindow);
@@ -238,61 +234,54 @@
                 document.getElementById('raceWindowAlert').style.display = 'none';
             }
             
-            // Reload trend/history if available
+            // Update winning numbers table and trend prediction
             if (status.history && status.history.length > 0) {
-                updateHistoryTable(status.history);
-            } else {
+                updateWinningNumbersTable(status.history);
                 loadTrend();
+            } else {
+                document.getElementById('predictionBox').style.display = 'none';
+                document.getElementById('winningNumbersTable').innerHTML = 
+                    '<tr><td colspan="6" class="loading">No winning numbers yet</td></tr>';
             }
         }
         
-        // Display last result prominently
-        function displayLastResult(lr) {
-            const container = document.getElementById('lastResultContent');
-            const colorClass = lr.color.toLowerCase();
-            container.innerHTML = 
-                `<div style="display: flex; align-items: center; gap: 15px; font-size: 1.2em;">
-                    <span>Latest Result:</span>
-                    <span class="ball ${colorClass}" style="width: 40px; height: 40px; line-height: 40px; font-size: 1.2em;">${lr.number}</span>
-                    <span><strong>${lr.color}</strong> | Issue: ${lr.issueNumber}</span>
-                    <span style="color: #888; font-size: 0.9em;">${new Date(lr.timestamp).toLocaleTimeString()}</span>
-                </div>`;
-        }
-        
-        // Display race window alert prominently
+        // Display race window alert
         function displayRaceWindow(rw) {
             document.getElementById('raceWindowAlert').style.display = 'block';
             document.getElementById('raceWindowDetails').innerHTML = 
                 `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close | ${new Date(rw.timestamp).toLocaleTimeString()}`;
         }
         
-        // Update history table (newest first = at top)
-        function updateHistoryTable(history) {
-            const tbody = document.getElementById('historyTable');
-            tbody.innerHTML = history.slice().reverse().map((h, i) => {
-                const colorClass = h.color || (h.classify === 'violet' ? 'violet' : (h.number > 4 ? 'red' : 'green'));
+        // Update winning numbers table (newest at bottom like results flow)
+        function updateWinningNumbersTable(history) {
+            const tbody = document.getElementById('winningNumbersTable');
+            tbody.innerHTML = history.map((h, i) => {
+                const colorClass = h.color ? h.color.toLowerCase() : 'red';
+                const classify = h.classify || (h.number >= 5 ? 'big' : 'small');
                 return `<tr>
                     <td>${i + 1}</td>
                     <td>${h.issueNumber}</td>
-                    <td><span class="ball ${colorClass}">${h.number}</span></td>
+                    <td><span class="ball ${colorClass}" style="width: 35px; height: 35px; line-height: 35px;">${h.number}</span></td>
                     <td>${h.color || colorClass}</td>
-                    <td>${h.classify}</td>
+                    <td>${classify}</td>
                     <td>${new Date(h.timestamp).toLocaleTimeString()}</td>
                 </tr>`;
             }).join('');
         }
-        // Load history/trend
+
+        // Load trend prediction
         async function loadTrend() {
             const trend = await fetchAPI('/api/trend');
             const box = document.getElementById('predictionBox');
             const content = document.getElementById('predictionContent');
             
-            if (trend.error || trend.error) {
-                content.innerHTML = '<p>Not enough data yet (need 10 results). Collected: ' + (trend.available || 0) + '</p>';
+            box.style.display = 'block';
+            
+            if (trend.error) {
+                content.innerHTML = '<p style="text-align: center; color: #888;">Not enough data yet (need 10 results). Collected: ' + (trend.available || 0) + '</p>';
             } else {
                 content.innerHTML = generatePredictionHTML(trend);
             }
-            box.style.display = 'block';
         }
 
         function generatePredictionHTML(trend) {
@@ -300,29 +289,31 @@
             const a = trend.trendAnalysis;
             let html = '';
             
+            // Large prediction display
             if (p) {
-                html += `<div style="margin-bottom: 15px;">
-                    <strong>Prediction: ${p.prediction}</strong> 
-                    <span class="confidence ${p.confidence}">Confidence: ${p.confidence}</span>
+                const predClass = p.prediction === 'Big' ? 'prediction-big' : p.prediction === 'Small' ? 'prediction-small' : 'prediction-violet';
+                html += `<div class="prediction-large ${predClass}">
+                    ${p.prediction.toUpperCase()}
+                    <div style="margin-top: 10px; font-size: 0.4em;">
+                        <span class="confidence ${p.confidence}">Confidence: ${p.confidence}</span>
+                    </div>
                 </div>`;
             }
             
-            html += `<div>
-                <strong>Trend: ${a.trend}</strong> | 
-                Streak: ${a.streakLength} (${a.streak.join(' → ')})
-                <br>Big: ${a.last10.big} | Small: ${a.last10.small} | Violet: ${a.last10.violet}
-            </div>`;
-            
-            if (trend.history) {
-                html += '<table style="margin-top: 10px;"><thead><tr><th>Issue</th><th>Num</th><th>Type</th></tr></thead><tbody>';
-                trend.history.forEach(h => {
-                    html += `<tr>
-                        <td>${h.issueNumber?.substring(8) || h.issueNumber}</td>
-                        <td><span class="ball ${h.color || (h.classify==='violet'?'violet':(h.number>4?'red':'green'))}">${h.number}</span></td>
-                        <td>${h.classify}</td>
-                    </tr>`;
-                });
-                html += '</tbody></table>';
+            // Trend analysis
+            if (a) {
+                html += `<div style="margin-top: 15px;">
+                    <strong>Trend:</strong> 
+                    <span class="trend-indicator trend-${a.trend}">${a.trend.toUpperCase()}</span>
+                    <span class="trend-indicator trend-${a.streak[a.streak.length-1]}">${a.streak[a.streak.length-1]}</span>
+                    &nbsp; | &nbsp; Streak: ${a.streakLength} (${a.streak.join(' → ')})
+                    <br><br>
+                    <div style="display: flex; gap: 15px; margin-top: 10px;">
+                        <span style="color: #00ff88;">● Big: ${a.last10.big}</span>
+                        <span style="color: #ffaa00;">● Small: ${a.last10.small}</span>
+                        <span style="color: #aa55ff;">● Violet: ${a.last10.violet}</span>
+                    </div>
+                </div>`;
             }
             
             return html;
@@ -334,11 +325,11 @@
             const log = document.getElementById('eventsLog');
             
             if (res.events && res.events.length > 0) {
-                log.innerHTML = res.events.map(e => 
+                log.innerHTML = res.events.slice(-20).reverse().map(e => 
                     `<div class="event"><span class="time">[${new Date(e.timestamp).toLocaleTimeString()}]</span> <span class="message">${e.message || JSON.stringify(e)}</span></div>`
                 ).join('');
             } else {
-                log.innerHTML = '<div class="event"><span class="time">[$(new Date().toLocaleTimeString())]</span> <span class="message">No events yet</span></div>';
+                log.innerHTML = '<div class="event"><span class="time">[' + new Date().toLocaleTimeString() + ']</span> <span class="message">No events yet</span></div>';
             }
         }
 
@@ -364,7 +355,11 @@
         // Poll
         function startPoll() {
             updateStatus();
-            pollInterval = setInterval(updateStatus, POLL_INTERVAL);
+            loadTrend();
+            loadEvents();
+            pollInterval = setInterval(() => {
+                updateStatus();
+            }, POLL_INTERVAL);
         }
 
         // Initial load
