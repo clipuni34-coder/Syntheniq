@@ -48,8 +48,89 @@ const state = {
     betsPlaced: 0,
     wins: 0,
     losses: 0
-  }
+  },
+  // === Trend Analysis State ===
+  history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
+  trendPrediction: null  // Current trend-based prediction
 };
+
+// === Trend Analysis Engine ===
+// Uses last 10 game results to predict next Big/Small outcome
+function updateHistory(result) {
+  state.history.push(result);
+  if (state.history.length > 10) {
+    state.history.shift();
+  }
+}
+
+function classifyTrend(results) {
+  const classes = results.map(r => r.classify);
+  const big = classes.filter(c => c === 'big').length;
+  const small = classes.filter(c => c === 'small').length;
+  
+  if (big > small) return 'big';
+  if (small > big) return 'small';
+  return 'balanced'; // Equal split
+}
+
+function analyzeTrend() {
+  if (state.history.length < 10) return null;
+  
+  const trend = classifyTrend(state.history);
+  const currentStreak = [];
+  const trendSequence = state.history.map(r => r.classify);
+  
+  // Find current streak
+  for (let i = trendSequence.length - 1; i >= 0; i--) {
+    if (trendSequence[i] === trendSequence[trendSequence.length - 1]) {
+      currentStreak.unshift(trendSequence[i]);
+    } else {
+      break;
+    }
+  }
+  
+  return {
+    trend: trend,
+    streak: currentStreak,
+    streakLength: currentStreak.length,
+    last10: {
+      big: trendSequence.filter(c => c === 'big').length,
+      small: trendSequence.filter(c => c === 'small').length,
+      violet: trendSequence.filter(c => c === 'violet').length
+    },
+    confidence: calculateConfidence(trendSequence, trend)
+  };
+}
+
+function calculateConfidence(sequence, trend) {
+  const counts = { big: 0, small: 0, violet: 0 };
+  sequence.forEach(c => counts[c]++);
+  
+  const total = sequence.length;
+  const ratio = counts[trend] / total;
+  
+  // Confidence based on how dominant the trend is
+  if (ratio >= 0.7) return 'high';
+  if (ratio >= 0.6) return 'medium';
+  if (ratio >= 0.55) return 'low';
+  return 'very-low';
+}
+
+// Predict next Big/Small outcome 2 seconds before close
+function predictNext() {
+  const analysis = analyzeTrend();
+  if (!analysis) return null;
+  
+  state.trendPrediction = {
+    prediction: analysis.trend === 'big' ? 'Big' : 'Small',
+    confidence: analysis.confidence,
+    basedOn: 'last_10_results',
+    trendAnalysis: analysis,
+    timestamp: new Date().toISOString()
+  };
+  
+  return state.trendPrediction;
+}
 
 // === API Signing (from winGoApiSearch.js) ===
 function randomHex() { 
@@ -293,8 +374,20 @@ async function startRaceMonitoring() {
           issueNumber: list[0].issueNumber,
           number: resultNum,
           color: resultColor,
+          classify: classify(resultNum),
           timestamp: new Date().toISOString()
         };
+        
+        // Update trend history
+        updateHistory(state.lastResult);
+        
+        // Generate prediction if we have 10 results
+        if (state.history.length >= 10) {
+          const prediction = predictNext();
+          if (prediction) {
+            console.log(`📈 Trend Prediction: ${prediction.prediction} (${prediction.confidence} confidence)`);
+          }
+        }
         
         state.stats.roundsDetected++;
         
@@ -425,6 +518,43 @@ app.get('/api/events', (req, res) => {
     events: state.events,
     stats: state.stats
   });
+});
+
+// === Trend Analysis Endpoint ===
+app.get('/api/trend', (req, res) => {
+  if (state.history.length < 10) {
+    return res.json({
+      error: 'Need 10 results for trend analysis',
+      available: state.history.length,
+      required: 10
+    });
+  }
+  
+  const analysis = analyzeTrend();
+  const prediction = predictNext();
+  
+  res.json({
+    history: state.history.map(h => ({
+      issueNumber: h.issueNumber,
+      number: h.number,
+      classify: h.classify
+    })),
+    trendAnalysis: analysis,
+    prediction: prediction,
+    status: 'active'
+  });
+});
+
+// === Manual Trend Prediction (2 seconds before close) ===
+app.get('/api/predict', (req, res) => {
+  const prediction = predictNext();
+  if (!prediction) {
+    return res.json({
+      error: 'Insufficient data (need 10 results)',
+      available: state.history.length
+    });
+  }
+  res.json(prediction);
 });
 
 app.post('/api/refresh-jwt', async (req, res) => {
