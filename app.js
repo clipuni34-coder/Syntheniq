@@ -581,7 +581,7 @@ async function startRaceMonitoring() {
         try {
           const lfRes = await httpRequest('fb999api.com', '/api/webapi/GetLastFiveIssueNumberResult', 'POST',
             JSON.stringify(signParams({ TypeId: 30 })),
-            { 'Authorization': `Bearer ${state.jwt}` }
+            { 'Authorization': `Bearer ${state.jwt}`, 'token': state.jwt, 'ar-token': state.jwt }
           );
           const lf = JSON.parse(lfRes.body);
           if (lf.code === 0 && lf.data?.number) {
@@ -590,7 +590,7 @@ async function startRaceMonitoring() {
             const latestNum = numbers[numbers.length - 1];
             
             // Check if this is a new result we haven't seen
-            if (latestNum !== state.lastEarlyLeakNumber) {
+            if (latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum)) {
               state.lastEarlyLeakNumber = latestNum;
               earlyLeak = {
                 number: latestNum,
@@ -601,9 +601,11 @@ async function startRaceMonitoring() {
               };
               console.log(`🚨 EARLY LEAK (API): ${latestNum} (${numberToColor(latestNum)}) ${Math.round(msToClose/1000)}s before close`);
             }
+          } else {
+            console.log(`⚠️ GetLastFiveIssueNumberResult: ${lf.code} - ${lf.msg || 'no data'}`);
           }
         } catch(e) {
-          // Silent fail - fallback to regular history
+          console.log(`⚠️ Early leak API error: ${e.message}`);
         }
       }
       
