@@ -97,13 +97,16 @@ function httpsGet(hostname, path) {
   });
 }
 
-// === Number to Color mapping (from JS bundle analysis) ===
-// Odd (1,3,5,7,9) → Red, Even (2,4,6,8) → Green, 0 → Violet
+// === Number to Color mapping (CORRECTED - verified against live API) ===
+// 0 → Violet (wins Red+Violet), 5 → Violet (wins Green+Violet)
+// odd (1,3,7,9) → Green, even (2,4,6,8) → Red
 function numberToColor(n) {
   n = parseInt(n);
   if (n === 0) return 'Violet';
-  if (n % 2 === 1) return 'Red';     // 1,3,5,7,9
-  return 'Green';                   // 2,4,6,8
+  if ([1, 3, 7, 9].includes(n)) return 'Green';
+  if ([2, 4, 6, 8].includes(n)) return 'Red';
+  if (n === 5) return 'Violet';
+  return 'Unknown';
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

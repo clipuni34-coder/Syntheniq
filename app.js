@@ -320,11 +320,20 @@ function sendDiscordAlert(message, type = 'info') {
 }
 
 // === Number Classifiers ===
+// CORRECTED: The actual Draw server API returns these colors:
+//   0 → "red,violet"  (wins Red + Violet bets)
+//   5 → "green,violet" (wins Green + Violet bets)
+//   odd (1,3,7,9) → "green"
+//   even (2,4,6,8) → "red"
+// NOTE: The previous version had odd→Red/even→Green INVERTED — this was verified
+// against live API data at draw.ar-lottery06.com and corrected.
 function numberToColor(n) {
   n = parseInt(n);
-  if (n === 0) return 'Violet';
-  if ([1, 3, 5, 7, 9].includes(n)) return 'Red';
-  return 'Green';
+  if (n === 0) return 'Violet';           // special case: 0 wins Red+Violet
+  if ([1, 3, 7, 9].includes(n)) return 'Green';   // odd → Green
+  if ([2, 4, 6, 8].includes(n)) return 'Red';     // even → Red
+  if (n === 5) return 'Violet';           // special case: 5 wins Green+Violet (bypassed above since 5 is odd)
+  return 'Unknown';
 }
 
 function classify(n) {

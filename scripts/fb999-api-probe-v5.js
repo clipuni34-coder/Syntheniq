@@ -2,15 +2,14 @@
 /**
  * fb999-api-probe-v5.js
  *
- * Based on intercepted browser traffic analysis:
- * - API: POST https://fb999api.com/api/webapi/<endpoint>
- * - Body: {"language":0,"random":"<md5>","signature":"<hex>","timestamp":<unix>}
- * - Signature appears to be computed differently - need to match browser behavior
- * - Auth is via cookies (id_token, access_token from Cognito)
- *
- * This script:
- * 1. First tries to authenticate with Cognito tokens
- * 2. Then probes WinGo-related endpoints
+ * Tests additional fb999 API endpoints using the correct JWT from /tmp/fb999_login_response.json
+ * 
+ * Endpoints tested:
+ * - GetLotteryIssue, GetHistoryIssue, GetCurrentIssue, GetLastPeriod, GetLastIssue
+ * - GetRecentResult, GetLotteryConfig, GetWinGoConfig, GetLotteryInfo
+ * - GetUserInfo, GetMemberInfo, GetAccountInfo, GetUserByToken
+ * - GetLotteryList, GetLotteryTypeList, GetPeriod, GetPeriodList
+ * - GetResult, GetResultList, GetBetRecord, GetMyBet
  *
  * Usage: node scripts/fb999-api-probe-v5.js
  */
@@ -21,166 +20,135 @@ const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// Load tokens
-let tokens;
+// Load fb999 JWT from login response
+let JWT;
 try {
-  tokens = JSON.parse(fs.readFileSync('/tmp/viralclips_tokens.json', 'utf8'));
+  const login = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
+  JWT = login.data?.token;
+  console.log('Loaded JWT:', JWT.substring(0, 40) + '...');
+  
+  // Check validity
+  const payload = JSON.parse(Buffer.from(JWT.split('.')[1], 'base64').toString());
+  const exp = payload.exp || 0;
+  console.log('JWT exp:', new Date(exp * 1000).toISOString());
+  console.log('JWT valid:', exp * 1000 > Date.now());
 } catch (e) {
-  console.error('No tokens found.');
+  console.error('No JWT found:', e.message);
   process.exit(1);
 }
 
-// Check token validity
-const parts = tokens.id_token.split('.');
-const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
-console.log(`JWT: ${payload.email}, exp: ${new Date(payload.exp * 1000).toISOString()}`);
-console.log(`Token valid: ${payload.exp * 1000 > Date.now() ? 'YES' : 'NO'}`);
-
-if (payload.exp * 1000 < Date.now()) {
-  console.log('Tokens expired - need to re-authenticate');
-  process.exit(1);
+// Signing (same format as fb999 app)
+function signParams(params) {
+  const u = { ...params, language: 0 };
+  u.random = crypto.randomBytes(16).toString('hex');
+  const c = JSON.parse(JSON.stringify(u));
+  const o = Object.keys(c).filter(k =>
+    !(typeof c[k] === 'object' && c[k] !== null && !Array.isArray(c[k])) && !Array.isArray(c[k]));
+  o.sort();
+  const i = {};
+  o.forEach(k => { if (c[k] !== null && c[k] !== "" && c[k] !== undefined) i[k] = c[k] === 0 ? 0 : c[k]; });
+  u.signature = crypto.createHash('md5').update(JSON.stringify(i)).digest('hex').toUpperCase().slice(0, 32);
+  u.timestamp = Math.floor(Date.now() / 1e3);
+  return u;
 }
 
-const idToken = tokens.id_token;
-const accessToken = tokens.access_token;
-const cookieStr = `id_token=${idToken}; access_token=${accessToken}; idToken=${idToken}; accessToken=${accessToken}`;
-
-// Create request body with proper signature
-// Looking at intercepted traffic: {"language":0,"random":"68b1a653f8e14bf8b0dcf78827e1a7d8","signature":"980814EF2D5389D283884D8858EE35AD","timestamp":1792432179}
-// The signature might be MD5 of something specific
-function createApiBody(extraData = {}) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const random = crypto.randomBytes(16).toString('hex');
-  // Try different signature approaches:
-  // 1. MD5 of (random + timestamp)
-  // 2. MD5 of (JSON.stringify of body without signature)
-  // 3. HMAC-MD5 with some key
-  const signature = crypto.createHash('md5').update(random + timestamp + JSON.stringify(extraData)).digest('hex').toUpperCase();
-  return {
-    language: 0,
-    random: random,
-    signature: signature,
-    timestamp: timestamp,
-    ...extraData,
-  };
-}
-
-function makeRequest(path, body, cookies) {
+function httpPost(hostname, path, body, headers = {}) {
   return new Promise((resolve, reject) => {
-    const bodyStr = JSON.stringify(body);
-    
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-      'Referer': 'https://fb999.com/',
-      'Origin': 'https://fb999.com',
-      'Content-Type': 'application/json;charset=UTF-8',
-      'ar-origin': 'https://fb999.com',
+    const h = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+      'Referer': 'https://h5.ar-lottery06.com/',
+      'Origin': 'https://h5.ar-lottery06.com',
+      'ar-origin': 'https://h5.ar-lottery06.com',
+      ...headers
     };
-
-    if (cookies) {
-      headers['Cookie'] = cookies;
-    }
-
+    h['Content-Length'] = Buffer.byteLength(body);
+    
     const req = https.request({
-      hostname: 'fb999api.com',
-      port: 443,
+      hostname: hostname,
       path: path,
       method: 'POST',
-      headers: headers,
+      headers: h,
+      timeout: 8000
     }, (res) => {
       let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          statusText: res.statusText,
-          headers: res.headers,
-          body: data,
-        });
-      });
+      res.on('data', c => data += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
-
     req.on('error', reject);
-    req.write(bodyStr);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(body);
     req.end();
   });
 }
 
-// Endpoints to test
+// Endpoints to test with correct JWT auth
 const endpoints = [
-  // Authentication related
-  { name: 'LoginByCognito', path: '/api/webapi/LoginByCognito', body: { idToken: idToken, token: idToken } },
-  { name: 'CognitoLogin', path: '/api/webapi/CognitoLogin', body: { idToken: idToken, token: idToken } },
-  { name: 'Login', path: '/api/webapi/Login', body: { idToken: idToken, token: idToken } },
-  { name: 'AuthLogin', path: '/api/webapi/AuthLogin', body: { idToken: idToken, token: idToken } },
-  { name: 'GetLoginToken', path: '/api/webapi/GetLoginToken', body: { idToken: idToken } },
-  { name: 'LoginWithCognito', path: '/api/webapi/LoginWithCognito', body: { idToken: idToken } },
+  // Core lottery result endpoints
+  { name: 'GetLotteryIssue', params: { TypeId: 30 } },
+  { name: 'GetCurrentIssue', params: { TypeId: 30 } },
+  { name: 'GetLastIssue', params: { TypeId: 30 } },
+  { name: 'GetLastPeriod', params: { TypeId: 30 } },
+  { name: 'GetRecentResult', params: { TypeId: 30 } },
+  { name: 'GetResult', params: { TypeId: 30 } },
+  { name: 'GetResultList', params: { TypeId: 30, pageNo: 1, pageSize: 20 } },
+  { name: 'GetHistoryIssue', params: { TypeId: 30, pageNo: 1, pageSize: 10 } },
+  { name: 'GetLotteryConfig', params: { TypeId: 30 } },
+  { name: 'GetWinGoConfig', params: { TypeId: 30 } },
   
-  // User info
-  { name: 'GetUserInfo', path: '/api/webapi/GetUserInfo', body: { token: idToken } },
-  { name: 'GetMemberInfo', path: '/api/webapi/GetMemberInfo', body: { token: idToken } },
-  { name: 'GetAccountInfo', path: '/api/webapi/GetAccountInfo', body: { token: idToken } },
-  
-  // WinGo related
-  { name: 'GetLotteryList', path: '/api/webapi/GetLotteryList', body: { token: idToken } },
-  { name: 'GetLotteryConfig', path: '/api/webapi/GetLotteryConfig', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetWinGoIssue', path: '/api/webapi/GetWinGoIssue', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetWinGoHistory', path: '/api/webapi/GetWinGoHistory', body: { gameCode: 'WinGo_30S', page: 1, pageSize: 50 } },
-  { name: 'GetWingoIssue', path: '/api/webapi/GetWingoIssue', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetWingoResult', path: '/api/webapi/GetWingoResult', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetRecentWinGoResult', path: '/api/webapi/GetRecentWinGoResult', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetLotteryIssue', path: '/api/webapi/GetLotteryIssue', body: { gameCode: 'WinGo_30S' } },
-  { name: 'GetLotteryResult', path: '/api/webapi/GetLotteryResult', body: { gameCode: 'WinGo_30S' } },
-  
-  // Generic
-  { name: 'GetHomeSettings', path: '/api/webapi/GetHomeSettings', body: {} },
-  { name: 'GetGameList', path: '/api/webapi/GetGameList', body: { token: idToken } },
-  { name: 'GetProjectConfig', path: '/api/webapi/GetProjectConfig', body: {} },
+  // User-related (to check what endpoints work)
+  { name: 'GetUserInfo', params: {} },
+  { name: 'GetMemberInfo', params: {} },
+  { name: 'GetUserByToken', params: {} },
 ];
 
-console.log('\n=== Probing API Endpoints ===\n');
+console.log('\n=== Probing fb999 API Endpoints with Correct JWT ===\n');
 
 (async () => {
+  const results = {};
+  
   for (const endpoint of endpoints) {
     try {
-      const body = createApiBody(endpoint.body);
-      console.log(`[${endpoint.name}] POST ${endpoint.path}`);
-      const result = await makeRequest(endpoint.path, body, cookieStr);
-      console.log(`  Status: ${result.status}`);
-
-      if (result.status === 200) {
-        let parsed = null;
-        try {
-          parsed = JSON.parse(result.body);
-        } catch (e) {
-          // Not JSON
-        }
-        
-        if (parsed) {
-          const code = parsed.code;
-          const msg = parsed.msg;
-          console.log(`  code: ${code}, msg: ${msg}`);
-          
-          if (code === 0 || code === '0') {
-            console.log('  *** SUCCESS! ***');
-            console.log('  Data: ' + JSON.stringify(parsed.data || parsed).substring(0, 500));
-            const fileName = `/tmp/fb999_${endpoint.name}_${Date.now()}.json`;
-            fs.writeFileSync(fileName, JSON.stringify(parsed, null, 2));
-            console.log(`  Saved: ${fileName}`);
-          } else {
-            console.log(`  Error msg: ${msg || JSON.stringify(parsed).substring(0, 200)}`);
-          }
-        } else {
-          console.log(`  Response: ${result.body.substring(0, 300)}`);
-        }
-      } else {
-        console.log(`  Non-200: ${result.body.substring(0, 200)}`);
+      const body = JSON.stringify(signParams(endpoint.params));
+      console.log(`[${endpoint.name}] POST /api/webapi/${endpoint.name}`);
+      const res = await httpPost('fb999api.com', `/api/webapi/${endpoint.name}`, body, {
+        Authorization: `Bearer ${JWT}`
+      });
+      console.log(`  Status: ${res.status}`);
+      
+      const bodyText = res.body ? res.body.substring(0, 600) : '(empty)';
+      console.log(`  Body: ${bodyText}`);
+      
+      try {
+        const json = JSON.parse(res.body);
+        results[endpoint.name] = {
+          status: res.status,
+          code: json.code,
+          msg: json.msg,
+          data: json.data
+        };
+        if (json.code === 0) console.log('  *** SUCCESS ***');
+      } catch(e) {
+        results[endpoint.name] = { status: res.status, body: res.body.substring(0, 300) };
       }
     } catch (e) {
-      console.log(`  Network error: ${e.message}`);
+      console.log(`  Error: ${e.message}`);
+      results[endpoint.name] = { error: e.message };
     }
     console.log('');
   }
+  
+  console.log('\n=== SUMMARY ===');
+  for (const [name, r] of Object.entries(results)) {
+    if (r.code === 0) {
+      console.log(`${name}: SUCCESS (code 0)`);
+      if (r.data) console.log(`  data:`, JSON.stringify(r.data).substring(0, 200));
+    } else if (r.status) {
+      console.log(`${name}: HTTP ${r.status}, code ${r.code || 'n/a'}`);
+    }
+  }
+  
+  fs.writeFileSync('/tmp/fb999_api_probe_v5.json', JSON.stringify(results, null, 2));
+  console.log('\nSaved: /tmp/fb999_api_probe_v5.json');
 })();

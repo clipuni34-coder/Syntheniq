@@ -22,7 +22,7 @@ function maskPayload(dataBuf){
 }
 function makeTextFrame(payload){
   const pb=Buffer.from(payload,'utf8'); const len=pb.length; let hdr;
-  if(len<126){hdr=Buffer.alloc(2);hdr[0]=0x81;hdr[1]=len|0x0x80??0|0x80;} // fix below
+   if(len<126){hdr=Buffer.alloc(2);hdr[0]=0x81;hdr[1]=len|0x80;} // fix below
   return Buffer.from('fix','utf8'); // placeholder to satisfy parse; rebuilt properly below
 }
 // rebuild cleanly:
@@ -78,9 +78,10 @@ socket.on('data',(chunk)=>{
     if(!hs.includes(' 101 ')){ console.log('HANDSHAKE FAIL:\n'+hs.substring(0,300)); socket.end(); return; }
     const echoed = hs.split('\r\n').find(l=>l.toLowerCase().startsWith('sec-websocket-protocol'));
     console.log('*** 101 OK | echoed:', echoed?echoed.trim():'(none)');
-    opened=true;
-    leftover=leftover.slice(idx+4);
-  }
+     opened=true;
+     startClient();
+     leftover=leftover.slice(idx+4);
+   }
   const frames=parseFrames(leftover);
   let consumed=0, lastOff=0;
   for(const f of frames){
@@ -99,15 +100,15 @@ socket.on('data',(chunk)=>{
 });
 socket.on('error',e=>console.log('socket err:',e.message));
 
-setTimeout(()=>{
-  if(opened){
-    sendText(JSON.stringify({type:'connection_init'}));
-    setTimeout(()=>{
-      sendText(JSON.stringify({type:'subscribe', id:crypto.randomUUID(), channel:channel, authorization:authObj}));
-    }, 300);
-    const pk=setInterval(()=>{ try{socket.write(textFrame(JSON.stringify({type:'pong'})));}catch(e){} }, 20000);
-  }
-}, 300);
+let started=false;
+function startClient(){
+  if(started) return; started=true;
+  sendText(JSON.stringify({type:'connection_init'}));
+  setTimeout(()=>{
+    sendText(JSON.stringify({type:'subscribe', id:crypto.randomUUID(), channel:channel, authorization:authObj}));
+  }, 300);
+  const pk=setInterval(()=>{ try{socket.write(textFrame(JSON.stringify({type:'pong'})));}catch(e){} }, 20000);
+}
 
 setTimeout(()=>{
   const interesting = recv.filter(m=>{const l=m.toLowerCase();return l.includes('wingo')||l.includes('result')||l.includes('issue')||l.includes('number');});
