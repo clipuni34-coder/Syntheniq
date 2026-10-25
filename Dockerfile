@@ -1,6 +1,6 @@
 FROM node:18-alpine
 
-# Install Chromium and ALL required shared libraries for headless puppeteer
+# Install Chromium and required dependencies for headless puppeteer
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -11,8 +11,6 @@ RUN apk add --no-cache \
     ttf-freefont \
     fontconfig \
     libstdc++ \
-    libnss3 \
-    nspr \
     cups-libs \
     dbus-libs \
     libdrm \
