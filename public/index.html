@@ -137,26 +137,6 @@
             <div id="raceWindowDetails"></div>
         </div>
 
-        <!-- Winning Numbers (Last 10) -->
-        <div class="card">
-            <h3>Winning Numbers (Last 10 Rounds)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Round</th>
-                        <th>Issue Number</th>
-                        <th>Number</th>
-                        <th>Color</th>
-                        <th>Big/Small</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
-                <tbody id="winningNumbersTable">
-                    <tr><td colspan="6" class="loading">No winning numbers yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-
         <!-- Events Log -->
         <div class="card">
             <h3>Recent Events</h3>
@@ -234,14 +214,17 @@
                 document.getElementById('raceWindowAlert').style.display = 'none';
             }
             
-            // Update winning numbers table and trend prediction
-            if (status.history && status.history.length > 0) {
-                updateWinningNumbersTable(status.history);
+            // Load trend prediction from last 10 results (processed in background)
+            if (status.history && status.history.length >= 10) {
                 loadTrend();
+            } else if (status.history && status.history.length > 0) {
+                document.getElementById('predictionBox').style.display = 'block';
+                document.getElementById('predictionContent').innerHTML = 
+                    '<p style="text-align: center; color: #888;">Collecting data... ' + status.history.length + '/10 results</p>';
             } else {
-                document.getElementById('predictionBox').style.display = 'none';
-                document.getElementById('winningNumbersTable').innerHTML = 
-                    '<tr><td colspan="6" class="loading">No winning numbers yet</td></tr>';
+                document.getElementById('predictionBox').style.display = 'block';
+                document.getElementById('predictionContent').innerHTML = 
+                    '<p style="text-align: center; color: #888;">Waiting for race data...</p>';
             }
         }
         
@@ -252,23 +235,6 @@
                 `Result: ${rw.number} (${rw.color}) | ${Math.round(rw.msToClose/1000)}s to close | ${new Date(rw.timestamp).toLocaleTimeString()}`;
         }
         
-        // Update winning numbers table (newest at bottom like results flow)
-        function updateWinningNumbersTable(history) {
-            const tbody = document.getElementById('winningNumbersTable');
-            tbody.innerHTML = history.map((h, i) => {
-                const colorClass = h.color ? h.color.toLowerCase() : 'red';
-                const classify = h.classify || (h.number >= 5 ? 'big' : 'small');
-                return `<tr>
-                    <td>${i + 1}</td>
-                    <td>${h.issueNumber}</td>
-                    <td><span class="ball ${colorClass}" style="width: 35px; height: 35px; line-height: 35px;">${h.number}</span></td>
-                    <td>${h.color || colorClass}</td>
-                    <td>${classify}</td>
-                    <td>${new Date(h.timestamp).toLocaleTimeString()}</td>
-                </tr>`;
-            }).join('');
-        }
-
         // Load trend prediction
         async function loadTrend() {
             const trend = await fetchAPI('/api/trend');
