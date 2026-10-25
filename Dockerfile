@@ -23,8 +23,6 @@ RUN apk add --no-cache \
     gtk+3 \
     alsa-lib \
     atk \
-    atk-bridge2-core \
-    atk-bridge2-atk \
     libxcomposite \
     libxdamage \
     libxfixes \
@@ -32,7 +30,6 @@ RUN apk add --no-cache \
     libgbm \
     libpango \
     cairo \
-    nspr \
     mesa-gl
 
 # Tell puppeteer to use the system Chromium
