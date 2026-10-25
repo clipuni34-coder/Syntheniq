@@ -619,12 +619,12 @@ async function startRaceMonitoring() {
           }
         }
         
-        // Predict BEFORE close - when time to close is small but > 2s buffer
-        // This allows bets to be placed before the next draw closes
-        if (msToClose > 2000 && msToClose < 10000) {
+        // Predict BEFORE close - when time to close is small
+        // Race window: capture leaked result and bet on next draw
+        if (msToClose > 2000 && msToClose < 25000) {
           // We have a prediction, place bets on the NEXT draw
           // The next draw's result will be compared to our bet
-          const nextIssue = list[0]?.issueNumber;
+          const nextIssue = config.current?.issueNumber;
           if (nextIssue && !state.predictedForIssue[nextIssue]) {
             const betColor = advanced ? advanced.prediction.toLowerCase() : prediction.prediction.toLowerCase();
             console.log(`⚡ PRE-CLOSE PREDICTION: Betting on ${betColor} for next draw (${Math.round(msToClose/1000)}s before close)`);
@@ -641,9 +641,10 @@ async function startRaceMonitoring() {
             
             sendDiscordAlert(
               `**⚡ Early Prediction for Next Draw!**\n` +
+              `Issue: ${nextIssue}\n` +
               `Predicted: **${advanced ? advanced.prediction : prediction.prediction}**\n` +
               `Confidence: ${advanced ? advanced.confidence : prediction.confidence}\n` +
-              `Time left: ${Math.round(msToClose/1000)}s\n` +
+              `Time left: ${Math.round(msToClose/1000)}s before close\n` +
               `Betting on ${betColor}...`,
               'success'
             );
