@@ -68,7 +68,8 @@ const state = {
   // === Trend Analysis State ===
   history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
   trendPrediction: null,  // Current trend-based prediction
-  advancedPrediction: null // Multi-method high-accuracy prediction
+  advancedPrediction: null, // Multi-method high-accuracy prediction
+  predictedForIssue: {}   // Track which issues we've predicted for (prevents duplicate bets)
 };
 
 // === Trend Analysis Engine ===
@@ -497,7 +498,7 @@ async function startRaceMonitoring() {
         continue;
       }
       
-      // Get current round
+      // Get current round info
       const config = JSON.parse((await httpRequest('draw.ar-lottery06.com', '/WinGo/WinGo_30S.json')).body);
       const currentEnd = new Date(config.current.endTime).getTime();
       const now = Date.now();
@@ -508,6 +509,8 @@ async function startRaceMonitoring() {
         '/WinGo/WinGo_30S/GetHistoryIssuePage.json?pageNo=1&pageSize=10');
       const list = JSON.parse(histRes.body).data?.list || [];
       
+      // Detect new result
+      let newResultReceived = false;
       if (list.length > 0 && list[0].issueNumber !== lastDetectedIssue) {
         lastDetectedIssue = list[0].issueNumber;
         const resultNum = list[0].number;
@@ -523,82 +526,77 @@ async function startRaceMonitoring() {
         
         // Update trend history
         updateHistory(state.lastResult);
+        newResultReceived = true;
+        state.stats.roundsDetected++;
         
-        // Generate prediction if we have 10 results
-        if (state.history.length >= 10) {
-          const prediction = predictNext();
-          if (prediction) {
-            console.log(`📈 Trend Prediction: ${prediction.prediction} (${prediction.confidence} confidence)`);
-            
-            // Notify when confidence is high or very high
-            if (prediction.confidence === 'high' || prediction.confidence === 'very-high') {
-              sendDiscordAlert(
-                `**🎯 HIGH CONFIDENCE PREDICTION!**\n` +
-                `Prediction: **${prediction.prediction}**\n` +
-                `Confidence: **${prediction.confidence.toUpperCase()}**\n` +
-                `Based on last 10 results\n` +
-                `Big: ${prediction.trendAnalysis?.last10.big} | Small: ${prediction.trendAnalysis?.last10.small} | Violet: ${prediction.trendAnalysis?.last10.violet}`,
-                'warning'
-              );
-            }
-          }
+        console.log(`[${new Date().toLocaleTimeString()}] Result: ${resultNum} (${resultColor})`);
+      }
+      
+      // Generate predictions whenever we have 10 results
+      if (state.history.length >= 10) {
+        const prediction = predictNext();
+        const advanced = getAdvancedPrediction();
+        
+        if (advanced) {
+          state.advancedPrediction = advanced;
+          console.log(`🎯 Advanced Prediction: ${advanced.prediction} (${advanced.confidence} confidence, score: ${advanced.score}%)`);
           
-          // Generate advanced prediction if we have 10 results
-          const advanced = getAdvancedPrediction();
-          if (advanced) {
-            console.log(`🎯 Advanced Prediction: ${advanced.prediction} (${advanced.confidence} confidence, score: ${advanced.score}%)`);
-            
-            // High confidence alert
-            if (advanced.confidence === 'high' || advanced.confidence === 'very-high') {
-              sendDiscordAlert(
-                `**🎯 HIGH CONFIDENCE PREDICTION!**\n` +
-                `Prediction: **${advanced.prediction}**\n` +
-                `Confidence: **${advanced.confidence.toUpperCase()}** (Score: ${advanced.score}%)  \n` +
-                `Methods: ${advanced.methods.pattern} | Recent: ${advanced.methods.recentTrend}`,
-                'warning'
-              );
-            }
+          // High confidence alert
+          if (advanced.confidence === 'high' || advanced.confidence === 'very-high') {
+            sendDiscordAlert(
+              `**🎯 HIGH CONFIDENCE PREDICTION!**\n` +
+              `Prediction: **${advanced.prediction}**\n` +
+              `Confidence: **${advanced.confidence.toUpperCase()}** (Score: ${advanced.score}%)  \n` +
+              `Methods: ${advanced.methods.pattern} | Recent: ${advanced.methods.recentTrend}`,
+              'warning'
+            );
           }
         }
         
-        state.stats.roundsDetected++;
-        console.log(`  ${Math.round(msToClose/1000)}s to current round close`);
-        
-        // Check for race window
-        if (msToClose > 2000 && msToClose < 35000) {
-          raceWindow = true;
-          state.lastRaceWindow = {
-            color: resultColor,
-            number: resultNum,
-            msToClose: msToClose,
-            timestamp: new Date().toISOString()
-          };
-          
-          state.stats.raceWindowsFound++;
-          
-          console.log(`⚡ RACE WINDOW! ${Math.round(msToClose/1000)}s remaining`);
-          sendDiscordAlert(
-            `**Race Window Detected!**\n` +
-            `Result: ${resultNum} (${resultColor})\n` +
-            `Time to close: ${Math.round(msToClose/1000)}s\n` +
-            `Placing rapid bets...`,
-            'success'
-          );
-          
-          // Place race bets
-          await executeRaceBets(resultColor, list[0].issueNumber);
-          
-          raceWindow = false;
+        // Predict BEFORE close - when time to close is small but > 2s buffer
+        // This allows bets to be placed before the next draw closes
+        if (msToClose > 2000 && msToClose < 10000) {
+          // We have a prediction, place bets on the NEXT draw
+          // The next draw's result will be compared to our bet
+          const nextIssue = list[0]?.issueNumber;
+          if (nextIssue && !state.predictedForIssue[nextIssue]) {
+            const betColor = advanced ? advanced.prediction.toLowerCase() : prediction.prediction.toLowerCase();
+            console.log(`⚡ PRE-CLOSE PREDICTION: Betting on ${betColor} for next draw (${Math.round(msToClose/1000)}s before close)`);
+            
+            state.lastRaceWindow = {
+              color: betColor,
+              number: '-',
+              msToClose: msToClose,
+              timestamp: new Date().toISOString(),
+              prediction: true
+            };
+            
+            state.stats.raceWindowsFound++;
+            
+            sendDiscordAlert(
+              `**⚡ Early Prediction for Next Draw!**\n` +
+              `Predicted: **${advanced ? advanced.prediction : prediction.prediction}**\n` +
+              `Confidence: ${advanced ? advanced.confidence : prediction.confidence}\n` +
+              `Time left: ${Math.round(msToClose/1000)}s\n` +
+              `Betting on ${betColor}...`,
+              'success'
+            );
+            
+            await executeRaceBets(betColor, nextIssue);
+            state.predictedForIssue[nextIssue] = true;
+          }
         }
       }
+      
+      console.log(`  ${Math.round(msToClose/1000)}s to current round close`);
       
     } catch (e) {
       console.error('Monitor error:', e.message);
     }
     
-    // Continue polling even during race
+    // Fast polling - check every 50ms when close to draw close, slower otherwise
     if (!raceWindow) {
-      await sleep(50);
+      await sleep(msToClose < 5000 ? 100 : 50);
     }
   }
 }
