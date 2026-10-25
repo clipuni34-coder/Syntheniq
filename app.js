@@ -29,164 +29,27 @@ const PORT = process.env.PORT || 3000;
 const FB999_PHONE = process.env.FB999_PHONE || '2349121493739';
 const FB999_PASSWORD = process.env.FB999_PASSWORD || 'Drewziwugod6';
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL || null;
-
-const app = express();
-app.use(express.json());
-
-// === State Management ===
-const state = {
-  jwt: null,
-  jwtExpiry: 0,
-  raceWins: [],
-  events: [],
-  monitoring: false,
-  lastResult: null,
-  lastRaceWindow: null,
-  stats: {
-    roundsDetected: 0,
-    raceWindowsFound: 0,
-    betsPlaced: 0,
-    wins: 0,
-    losses: 0
-  },
-  // === Trend Analysis State ===
-  history: [],           // Last 10 results {issueNumber, number, color, classify, timestamp}
-  trendPrediction: null  // Current trend-based prediction
-};
-
-// === Trend Analysis Engine ===
-// Uses last 10 game results to predict next Big/Small outcome
-function updateHistory(result) {
-  state.history.push(result);
-  if (state.history.length > 10) {
-    state.history.shift();
-  }
-}
-
-function classifyTrend(results) {
-  const classes = results.map(r => r.classify);
-  const big = classes.filter(c => c === 'big').length;
-  const small = classes.filter(c => c === 'small').length;
-  
-  if (big > small) return 'big';
-  if (small > big) return 'small';
-  return 'balanced'; // Equal split
-}
-
-function analyzeTrend() {
-  if (state.history.length < 10) return null;
-  
-  const trend = classifyTrend(state.history);
-  const currentStreak = [];
-  const trendSequence = state.history.map(r => r.classify);
-  
-  // Find current streak
-  for (let i = trendSequence.length - 1; i >= 0; i--) {
-    if (trendSequence[i] === trendSequence[trendSequence.length - 1]) {
-      currentStreak.unshift(trendSequence[i]);
-    } else {
-      break;
-    }
-  }
-  
-  return {
-    trend: trend,
-    streak: currentStreak,
-    streakLength: currentStreak.length,
-    last10: {
-      big: trendSequence.filter(c => c === 'big').length,
-      small: trendSequence.filter(c => c === 'small').length,
-      violet: trendSequence.filter(c => c === 'violet').length
-    },
-    confidence: calculateConfidence(trendSequence, trend)
-  };
-}
-
-function calculateConfidence(sequence, trend) {
-  const counts = { big: 0, small: 0, violet: 0 };
-  sequence.forEach(c => counts[c]++);
-  
-  const total = sequence.length;
-  const ratio = counts[trend] / total;
-  
-  // Confidence based on how dominant the trend is
-  if (ratio >= 0.7) return 'high';
-  if (ratio >= 0.6) return 'medium';
-  if (ratio >= 0.55) return 'low';
-  return 'very-low';
-}
-
-// Predict next Big/Small outcome 2 seconds before close
-function predictNext() {
-  const analysis = analyzeTrend();
-  if (!analysis) return null;
-  
-  state.trendPrediction = {
-    prediction: analysis.trend === 'big' ? 'Big' : 'Small',
-    confidence: analysis.confidence,
-    basedOn: 'last_10_results',
-    trendAnalysis: analysis,
-    timestamp: new Date().toISOString()
-  };
-  
-  return state.trendPrediction;
-}
-
-// === API Signing (from winGoApiSearch.js) ===
-function randomHex() { 
-  return crypto.randomBytes(16).toString('hex'); 
-}
-
-function md5Hex(str) { 
-  return crypto.createHash('md5').update(str).digest('hex').toUpperCase().slice(0, 32); 
-}
-
-function signParams(params) {
-  const u = { ...params, language: 0 };
-  u.random = randomHex();
-  const c = JSON.parse(JSON.stringify(u));
-  const o = Object.keys(c).filter(key =>
-    !(typeof c[key] === 'object' && c[key] !== null && !Array.isArray(c[key])) && !Array.isArray(c[key]));
-  o.sort();
-  const i = {};
-  o.forEach(key => { if (c[key] !== null && c[key] !== "" && c[key] !== undefined) i[key] = c[key] === 0 ? 0 : c[key]; });
-  u.signature = md5Hex(JSON.stringify(i));
-  u.timestamp = Math.floor(Date.now() / 1e3);
-  return u;
-}
-
-// === HTTP Request Helpers ===
-function httpRequest(hostname, path, method = 'GET', body = null, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname,
-      path,
-      method,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
-        'Referer': 'https://fb999.com/',
-        'Origin': 'https://fb999.com',
-        'ar-origin': 'https://fb999.com',
-        ...headers
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
-    });
-    req.on('error', reject);
-    if (body) {
-      headers['Content-Length'] = Buffer.byteLength(body);
-      req.write(body);
-    }
-    req.end();
-  });
-}
+const FB999_JWT = process.env.FB999_JWT || null; // Can set JWT via env var
 
 // === JWT Management ===
 function loadJwt() {
+  // Try environment variable first
+  if (FB999_JWT) {
+    try {
+      const parts = FB999_JWT.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        if (payload.exp) {
+          state.jwtExpiry = payload.exp;
+          if (state.jwtExpiry > Math.floor(Date.now() / 1000)) {
+            console.log('JWT loaded from environment variable');
+            return FB999_JWT;
+          }
+        }
+      }
+    } catch(e) {}
+  }
+  
   try {
     const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
     const token = loginData.data?.token;
@@ -594,7 +457,7 @@ app.post('/api/start-monitoring', (req, res) => {
 async function init() {
   console.log('=== WinGo_30S Race Condition App ===\n');
   
-   // Initial JWT refresh
+   // Initial JWT refresh/load
    console.log('Loading JWT...');
    state.jwt = loadJwt();
    
@@ -604,8 +467,14 @@ async function init() {
    } else {
      // Set jwtExpiry from the loaded token's expiry
      try {
-       const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
-       state.jwtExpiry = loginData.data?.expiresIn || 0;
+       if (FB999_JWT) {
+         const parts = FB999_JWT.split('.');
+         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+         state.jwtExpiry = payload.exp || 0;
+       } else {
+         const loginData = JSON.parse(fs.readFileSync('/tmp/fb999_login_response.json', 'utf8'));
+         state.jwtExpiry = loginData.data?.expiresIn || 0;
+       }
      } catch (e) {}
    }
   
@@ -616,9 +485,17 @@ async function init() {
     console.log(`Status: http://localhost:${PORT}/api/status\n`);
   });
   
-  // Start monitoring
+  // Start monitoring automatically
   if (state.jwt) {
+    console.log('JWT loaded, starting race monitoring...');
     await startRaceMonitoring();
+  } else {
+    console.log('No JWT available, retrying in 30s...');
+    setTimeout(async () => {
+      state.jwt = loadJwt();
+      if (!state.jwt) await refreshJwt();
+      if (state.jwt) startRaceMonitoring();
+    }, 30000);
   }
   
   // Auto-refresh JWT every 25 minutes
