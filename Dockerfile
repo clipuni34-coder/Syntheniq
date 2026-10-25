@@ -1,9 +1,8 @@
 FROM node:18-alpine
 
-# Cache-busting: 2026-10-25-alpine-fix
-# Alpine 3.18 (node:18-alpine) packages verified available:
-#   chromium, nss, nspr, freetype, harfbuzz, ca-certificates,
-#   ttf-freefont, ttf-dejavu, fontconfig, libstdc++, libgcc, gtk+3
+# Cache-busting: 2026-10-25-alpine-fix-v2
+# Alpine 3.18 (node:18-alpine) - use gtk+3.0 not gtk+3
+# Verified packages: chromium (community), nss/nspr/freetype/harfbuzz (main), etc.
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -12,11 +11,10 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    ttf-dejavu \
     fontconfig \
     libstdc++ \
     libgcc \
-    gtk+3
+    gtk+3.0
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
