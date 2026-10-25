@@ -485,10 +485,23 @@ async function init() {
     console.log(`Status: http://localhost:${PORT}/api/status\n`);
   });
   
-  // Start monitoring automatically
-  console.log('Starting race monitoring...');
-  state.monitoring = true; // Force monitoring to start
-  await startRaceMonitoring();
+  // Try to start monitoring without blocking server startup
+  setTimeout(async () => {
+    try {
+      if (!state.jwt) {
+        console.log('Attempting JWT refresh...');
+        await refreshJwt().catch(err => console.error('JWT refresh error:', err.message));
+      }
+      
+      if (state.jwt) {
+        console.log('Starting race monitoring...');
+        state.monitoring = true;
+        startRaceMonitoring();
+      }
+    } catch(e) {
+      console.error('Startup monitoring error:', e.message);
+    }
+  }, 5000);
   
   // Auto-refresh JWT every 25 minutes
   setInterval(async () => {
