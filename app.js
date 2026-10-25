@@ -577,7 +577,7 @@ async function startRaceMonitoring() {
       
       // ALSO check GetLastFiveIssueNumberResult for EARLY leak (17-33s before close!)
       let earlyLeak = null;
-      if (state.jwt && msToClose > 10000 && msToClose < 35000) {
+      if (state.jwt && msToClose > 15000 && msToClose < 35000) {
         try {
           const lfRes = await httpRequest('fb999api.com', '/api/webapi/GetLastFiveIssueNumberResult', 'POST',
             JSON.stringify(signParams({ TypeId: 30 })),
@@ -589,41 +589,33 @@ async function startRaceMonitoring() {
             const numbers = lf.data.number.split(',').map(n => parseInt(n));
             const latestNum = numbers[numbers.length - 1];
             
-            // Check if this number is NEW (not in our history yet)
-            const isNewNumber = !state.history.slice(-5).some(h => h.number === latestNum);
+            // Check if this number is NEW (not in our history)
+            const isNewNumber = !state.history.some(h => h.number === latestNum);
             
-            // Verify this number belongs to the current round by matching with history
-            // If list[0] has the same number, it's likely for the previous closed round
-            const isNewResult = latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum) && isNewNumber;
-            
-            if (isNewResult) {
+            if (latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum) && isNewNumber) {
               state.lastEarlyLeakNumber = latestNum;
               
-              // Cross-check with current round from config
-              // The result is for the round that just closed or is closing NOW
-              // We bet on the CURRENT open round (config.current)
+              // This is an early leak but for a PREVIOUS round (not current)
+              // We can use it for pattern prediction
               earlyLeak = {
                 number: latestNum,
                 color: numberToColor(latestNum),
                 msToClose: msToClose,
                 source: 'GetLastFiveIssueNumberResult',
                 timestamp: new Date().toISOString(),
-                verified: true // We've confirmed this is a fresh result
+                forPreviousRound: true
               };
-              console.log(`🚨 EARLY LEAK (API): ${latestNum} (${numberToColor(latestNum)}) ${Math.round(msToClose/1000)}s before close - BETTING ON CURRENT ROUND`);
+              console.log(`🚨 EARLY LEAK (API): ${latestNum} (${numberToColor(latestNum)}) ${Math.round(msToClose/1000)}s before close - PREVIOUS round result (pattern use)`);
             }
-          } else {
-            console.log(`⚠️ GetLastFiveIssueNumberResult: ${lf.code} - ${lf.msg || 'no data'}`);
           }
         } catch(e) {
           console.log(`⚠️ Early leak API error: ${e.message}`);
         }
       }
       
-      // Detect result from draw server - verify issue number matches current round for 100% accuracy
+      // Detect result from draw server - check if it matches current open round for 100% accuracy
       let newResultReceived = false;
-      let leakedResult = earlyLeak;
-      let actualLeak = null; // The result that matches the current open round exactly
+      let verifiedLeak = null; // 100% verified - issue number matches current round exactly
       
       if (list.length > 0 && list[0].issueNumber !== lastDetectedIssue) {
         lastDetectedIssue = list[0].issueNumber;
@@ -639,8 +631,8 @@ async function startRaceMonitoring() {
         };
         
         // Check if this result is for the current open round (100% verified leak)
-        if (list[0].issueNumber === config.current?.issueNumber) {
-          actualLeak = {
+        if (list[0].issueNumber === config.current?.issueNumber && msToClose > 2000) {
+          verifiedLeak = {
             issueNumber: list[0].issueNumber,
             number: resultNum,
             color: resultColor,
@@ -648,20 +640,7 @@ async function startRaceMonitoring() {
             source: 'VerifiedCurrentRound',
             timestamp: new Date().toISOString()
           };
-          console.log(`🎯 VERIFIED LEAK: Result ${resultNum} (${resultColor}) for CURRENT round ${list[0].issueNumber} at ${Math.round(msToClose/1000)}s before close`);
-        }
-        
-        // If we haven't already leaked this via API, mark it here
-        if (!leakedResult && !actualLeak) {
-          leakedResult = {
-            issueNumber: list[0].issueNumber,
-            number: resultNum,
-            color: resultColor,
-            msToClose: msToClose,
-            source: 'GetHistoryIssuePage',
-            timestamp: new Date().toISOString()
-          };
-          console.log(`⚡ LATE LEAK: ${resultNum} (${resultColor}) ${Math.round(msToClose/1000)}s before close`);
+          console.log(`🎯 VERIFIED LEAK: ${resultNum} (${resultColor}) for CURRENT round ${list[0].issueNumber} at ${Math.round(msToClose/1000)}s before close`);
         }
         
         // Update trend history
@@ -672,44 +651,42 @@ async function startRaceMonitoring() {
         console.log(`[${new Date().toLocaleTimeString()}] Result: ${resultNum} (${resultColor})`);
       }
       
-      // BET ON VERIFIED LEAKED RESULT - if it matches the current round, it's 100% accurate
-      const betResult = actualLeak || leakedResult;
-      if (betResult && msToClose > 5000) {
-        const betColor = betResult.color.toLowerCase();
-        const targetIssue = betResult.issueNumber || config.current?.issueNumber;
-        const isVerified = betResult.source === 'VerifiedCurrentRound' || betResult.verified === true;
+      // BET ONLY ON VERIFIED LEAK - 100% accurate
+      if (verifiedLeak) {
+        const betColor = verifiedLeak.color.toLowerCase();
+        const targetIssue = verifiedLeak.issueNumber;
         
-        console.log(`⚡ LEAK-BASED BET: ${isVerified ? '100% ACCURATE' : 'Pattern-based'} - ${betResult.source} result ${betResult.number} (${betColor}) ${Math.round(msToClose/1000)}s before close`);
+        console.log(`✅ 100% ACCURATE BET: Verified leak ${verifiedLeak.number} (${betColor}) ${Math.round(msToClose/1000)}s before close`);
         
         state.lastRaceWindow = {
           color: betColor,
-          number: betResult.number,
+          number: verifiedLeak.number,
           msToClose: msToClose,
           timestamp: new Date().toISOString(),
           isLeakedResult: true,
-          leakSource: betResult.source,
-          verified: isVerified
+          leakSource: verifiedLeak.source,
+          verified: true
         };
         
         state.stats.raceWindowsFound++;
         
         sendDiscordAlert(
-          `**🚨 ${isVerified ? '✅ VERIFIED LEAK' : '⚡ EARLY LEAK'} DETECTED!**\n` +
-          `Number: **${betResult.number}**\n` +
-          `Color: **${betResult.color}**\n` +
-          `Source: ${betResult.source}\n` +
-          `Accuracy: **${isVerified ? '100%' : '~60%'}**\n` +
+          `**✅ VERIFIED LEAK DETECTED!**\n` +
+          `Number: **${verifiedLeak.number}**\n` +
+          `Color: **${verifiedLeak.color}**\n` +
+          `Issue: ${verifiedLeak.issueNumber}\n` +
+          `Accuracy: **100%**\n` +
           `Time before close: ${Math.round(msToClose/1000)}s\n` +
           `Betting on ${betColor}...`,
-          isVerified ? 'success' : 'warning'
+          'success'
         );
         
         await executeRaceBets(betColor, targetIssue);
         state.predictedForIssue[targetIssue] = true;
       }
       
-      // Generate predictions whenever we have 10 results (fallback for when no leak)
-      if (state.history.length >= 10 && !leakedResult) {
+      // Generate predictions whenever we have 10 results (for display)
+      if (state.history.length >= 10) {
         const prediction = predictNext();
         const advanced = getAdvancedPrediction();
         
