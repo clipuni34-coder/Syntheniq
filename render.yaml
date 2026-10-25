@@ -2,6 +2,7 @@ services:
   - type: web
     name: wingo-racer
     runtime: docker
+    branch: kilo/firm-dune-ur8
     plan: free
     region: oregon
     envVars:
