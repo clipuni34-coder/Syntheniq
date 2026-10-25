@@ -620,7 +620,8 @@ async function startRaceMonitoring() {
       
       // Detect result from draw server (leaks ~2.5s before close)
       let newResultReceived = false;
-      let leakedResult = earlyLeak;
+      // Use either the draw server verified leak, or fallback to API early leak (unverified)
+      let leakedResult = earlyLeak; // Fallback to API data (marked forPreviousRound: true)
       
       if (list.length > 0 && list[0].issueNumber !== lastDetectedIssue) {
         lastDetectedIssue = list[0].issueNumber;
@@ -636,8 +637,8 @@ async function startRaceMonitoring() {
         };
         
         // The result is for list[0].issueNumber - the issue that just got published
-        // If msToClose > 2000, this is a RACE WINDOW: result appeared before close
-        if (!leakedResult && msToClose > 2000) {
+        // If msToClose > 2000, this is a RACE WINDOW: result appeared while current round is still open
+        if (msToClose > 2000) {
           leakedResult = {
             issueNumber: list[0].issueNumber,
             number: resultNum,
@@ -645,9 +646,9 @@ async function startRaceMonitoring() {
             msToClose: msToClose,
             source: 'GetHistoryIssuePage',
             timestamp: new Date().toISOString(),
-            verified: true // Verified: issue number matches exactly
+            verified: true // Verified: issue number from draw server matches exactly
           };
-          console.log(`⚡ RACE WINDOW: ${resultNum} (${resultColor}) result for issue ${list[0].issueNumber} appeared ${Math.round(msToClose/1000)}s before close - 100% VERIFIED`);
+          console.log(`⚡ RACE WINDOW: ${resultNum} (${resultColor}) for issue ${list[0].issueNumber} appeared ${Math.round(msToClose/1000)}s before close - 100% VERIFIED`);
         }
         
         // Update trend history
