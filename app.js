@@ -486,17 +486,9 @@ async function init() {
   });
   
   // Start monitoring automatically
-  if (state.jwt) {
-    console.log('JWT loaded, starting race monitoring...');
-    await startRaceMonitoring();
-  } else {
-    console.log('No JWT available, retrying in 30s...');
-    setTimeout(async () => {
-      state.jwt = loadJwt();
-      if (!state.jwt) await refreshJwt();
-      if (state.jwt) startRaceMonitoring();
-    }, 30000);
-  }
+  console.log('Starting race monitoring...');
+  state.monitoring = true; // Force monitoring to start
+  await startRaceMonitoring();
   
   // Auto-refresh JWT every 25 minutes
   setInterval(async () => {
