@@ -11,10 +11,9 @@ RUN apk add --no-cache \
     ttf-freefont \
     fontconfig \
     libstdc++ \
+    nspr \
     cups-libs \
     dbus-libs \
-    libdrm \
-    libxcb \
     libxkbcommon \
     libxkbcommon-x11 \
     xorg-server-xvfb \
