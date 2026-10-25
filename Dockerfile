@@ -1,6 +1,6 @@
 FROM node:18-alpine
 
-# Install Chromium and ALL required shared libraries for headless puppeteer
+# Install Chromium and required dependencies for headless puppeteer
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -12,14 +12,28 @@ RUN apk add --no-cache \
     ttf-freefont \
     fontconfig \
     libstdc++ \
-    cups-libs \
-    dbus-libs \
+    cups \
+    dbus \
     libdrm \
     libxcb \
     libxkbcommon \
     libxkbcommon-x11 \
     xorg-server-xvfb \
-    xvfb
+    xvfb \
+    gtk+3 \
+    alsa-lib \
+    atk \
+    atk-bridge2-core \
+    atk-bridge2-atk \
+    libxcomposite \
+    libxdamage \
+    libxfixes \
+    libxrandr \
+    libgbm \
+    libpango \
+    cairo \
+    nspr \
+    mesa-gl
 
 # Tell puppeteer to use the system Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
