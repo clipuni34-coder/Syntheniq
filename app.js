@@ -126,6 +126,7 @@ function calculateConfidence(sequence, trend) {
   const ratio = counts[trend] / total;
   
   // Confidence based on how dominant the trend is
+  if (ratio >= 0.8) return 'very-high';
   if (ratio >= 0.7) return 'high';
   if (ratio >= 0.6) return 'medium';
   if (ratio >= 0.55) return 'low';
