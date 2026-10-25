@@ -1,13 +1,12 @@
 FROM node:18-alpine
 
-# Install Chromium and required dependencies for headless puppeteer
-# Fixed Alpine package names for node:18-alpine (Alpine 3.18)
+# Install only the essential Chromium dependencies
+# Based on Alpine 3.18 package availability for node:18-alpine
 RUN apk add --no-cache \
     chromium \
     nss \
     nspr \
     freetype \
-    freetype-dev \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
@@ -15,7 +14,6 @@ RUN apk add --no-cache \
     fontconfig \
     libstdc++ \
     cups \
-    dbus \
     libdrm \
     libxcb \
     libxkbcommon \
@@ -30,10 +28,7 @@ RUN apk add --no-cache \
     libxfixes \
     libxrandr \
     libgbm \
-    pango \
-    cairo \
-    mesa-dev \
-    nss-dev
+    mesa-gl
 
 # Tell puppeteer to use the system Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
@@ -46,8 +41,6 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install app dependencies
-# puppeteer's postinstall may try to download Chromium even with SKIP_CHROMIUM_DOWNLOAD=true,
-# so we set it before npm ci
 RUN PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm ci --omit=dev
 
 # Copy app source
