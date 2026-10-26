@@ -71,7 +71,20 @@ const state = {
   advancedPrediction: null, // Multi-method high-accuracy prediction
   predictedForIssue: {},  // Track which issues we've predicted for (prevents duplicate bets)
   earlyLeaks: [],        // Early leaked results before countdown completes
-  lastEarlyLeakNumber: null  // Track last number from GetLastFiveIssueNumberResult
+  lastEarlyLeakNumber: null,  // Track last number from GetLastFiveIssueNumberResult
+  
+  // === Pattern Tracking State ===
+  // Tracks the "4th round back" pattern from delayed FB999 API data
+  patternTracking: {
+    enabled: true,
+    predictions: [],    // Array of {predictedNumber, actualNumber, result, timestamp, issueNumber}
+    wins: 0,
+    losses: 0,
+    totalAttempts: 0,
+    lastPrediction: null,
+    lastVerified: null,
+    pendingPredictions: {},  // issueNumber -> {predictedNumber, predictedColor}
+  },
 };
 
 // === Trend Analysis Engine ===
@@ -593,19 +606,56 @@ async function startRaceMonitoring() {
             
             // Check if this number is NEW (not in our history)
             const isNewNumber = !state.history.some(h => h.number === latestNum);
-            
-            if (latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum) && isNewNumber) {
-              state.lastEarlyLeakNumber = latestNum;
-              
-              // Store the early leak for UI display
-              const leakInfo = {
-                number: latestNum,
-                color: numberToColor(latestNum),
-                msToClose: msToClose,
-                source: 'GetLastFiveIssueNumberResult',
-                timestamp: new Date().toISOString(),
-                forPreviousRound: true
-              };
+             if (latestNum !== state.lastEarlyLeakNumber && !isNaN(latestNum) && isNewNumber) {
+               state.lastEarlyLeakNumber = latestNum;
+               
+               // 🎯 PATTERN TRACKING: Capture "4th round back" prediction
+               // numbers array = ["8,7,5,7,5"] where index 4 is most recent
+               // 4th round back = numbers[0] (oldest in the 5-number window)
+               // This is the prediction for the current round
+               const fourthBackNum = numbers[0]; // 4th round ago
+               const fourthBackColor = numberToColor(fourthBackNum);
+               const fourthBackClass = classify(fourthBackNum);
+               
+               if (!isNaN(fourthBackNum)) {
+                 // Store as pending prediction for the current open round
+                 const currentIssue = config.current?.issueNumber;
+                 if (currentIssue) {
+                   state.patternTracking.pendingPredictions[currentIssue] = {
+                     predictedNumber: fourthBackNum,
+                     predictedColor: fourthBackColor,
+                     predictedClassify: fourthBackClass,
+                     timestamp: new Date().toISOString(),
+                     msToClose: msToClose
+                   };
+                   state.patternTracking.lastPrediction = {
+                     issueNumber: currentIssue,
+                     predictedNumber: fourthBackNum,
+                     predictedColor: fourthBackColor,
+                     predictedClassify: fourthBackClass,
+                     timestamp: new Date().toISOString(),
+                     msToClose: msToClose
+                   };
+                 }
+               }
+               
+               // Store the early leak for UI display
+
+               const leakInfo = {
+                 number: latestNum,
+                 color: numberToColor(latestNum),
+                 msToClose: msToClose,
+                 source: 'GetLastFiveIssueNumberResult',
+                 timestamp: new Date().toISOString(),
+                 forPreviousRound: true,
+                 allFive: lf.data.number,
+                 fourthBack: {
+                   number: fourthBackNum,
+                   color: fourthBackColor,
+                   classify: fourthBackClass,
+                   predictionForCurrentRound: !!currentIssue
+                 }
+               };
               state.earlyLeaks.push(leakInfo);
               if (state.earlyLeaks.length > 20) state.earlyLeaks.shift();
               
@@ -627,12 +677,13 @@ async function startRaceMonitoring() {
         lastDetectedIssue = list[0].issueNumber;
         const resultNum = list[0].number;
         const resultColor = numberToColor(resultNum);
+        const resultClassify = classify(resultNum);
         
         state.lastResult = {
           issueNumber: list[0].issueNumber,
           number: resultNum,
           color: resultColor,
-          classify: classify(resultNum),
+          classify: resultClassify,
           timestamp: new Date().toISOString()
         };
         
@@ -651,7 +702,56 @@ async function startRaceMonitoring() {
           console.log(`⚡ RACE WINDOW: ${resultNum} (${resultColor}) for issue ${list[0].issueNumber} appeared ${Math.round(msToClose/1000)}s before close - 100% VERIFIED`);
         }
         
+        // 🎯 PATTERN TRACKING: Verify pending predictions
+        const pending = state.patternTracking.pendingPredictions[list[0].issueNumber];
+        if (pending) {
+          const isMatch = pending.predictedClassify === resultClassify;
+          const matchType = isMatch ? 'WIN' : 'LOSS';
+          
+          if (isMatch) {
+            state.patternTracking.wins++;
+          } else {
+            state.patternTracking.losses++;
+          }
+          
+          state.patternTracking.totalAttempts++;
+          
+          const predictionRecord = {
+            issueNumber: list[0].issueNumber,
+            predictedNumber: pending.predictedNumber,
+            predictedColor: pending.predictedColor,
+            predictedClassify: pending.predictedClassify,
+            actualNumber: resultNum,
+            actualColor: resultColor,
+            actualClassify: resultClassify,
+            result: matchType,
+            timestamp: new Date().toISOString()
+          };
+          
+          state.patternTracking.predictions.push(predictionRecord);
+          if (state.patternTracking.predictions.length > 20) {
+            state.patternTracking.predictions.shift();
+          }
+          
+          state.patternTracking.lastVerified = predictionRecord;
+          
+          delete state.patternTracking.pendingPredictions[list[0].issueNumber];
+          
+          console.log(`📊 Pattern ${matchType}: Predicted ${pending.predictedClassify} (${pending.predictedNumber}) | Actual ${resultClassify} (${resultNum}) | Win rate: ${Math.round(state.patternTracking.wins / state.patternTracking.totalAttempts * 100)}%`);
+          
+          sendDiscordAlert(
+            `**📊 Pattern Prediction Result**\n` +
+            `Issue: ${list[0].issueNumber}\n` +
+            `Predicted: ${pending.predictedClassify} (${pending.predictedNumber} ${pending.predictedColor})\n` +
+            `Actual: ${resultClassify} (${resultNum} ${resultColor})\n` +
+            `Result: **${matchType}**\n` +
+            `Record: ${state.patternTracking.wins}W - ${state.patternTracking.losses}L (${Math.round(state.patternTracking.wins / state.patternTracking.totalAttempts * 100)}% accuracy)`,
+            matchType === 'WIN' ? 'success' : 'warning'
+          );
+        }
+        
         // Update trend history
+
         updateHistory(state.lastResult);
         newResultReceived = true;
         state.stats.roundsDetected++;
@@ -817,7 +917,20 @@ app.get('/api/status', (req, res) => {
     race_wins: state.raceWins,
     history: state.history.slice(-10),  // Last 10 results for UI
     advancedPrediction: state.advancedPrediction,  // High-accuracy prediction
-    earlyLeaks: state.earlyLeaks.slice(-20)  // Early leaked results before countdown ends
+    earlyLeaks: state.earlyLeaks.slice(-20),  // Early leaked results before countdown ends
+    // Pattern tracking for "4th round back" prediction accuracy
+    patternTracking: state.patternTracking && {
+      enabled: state.patternTracking.enabled,
+      totalAttempts: state.patternTracking.totalAttempts,
+      wins: state.patternTracking.wins,
+      losses: state.patternTracking.losses,
+      accuracy: state.patternTracking.totalAttempts > 0 
+        ? Math.round((state.patternTracking.wins / state.patternTracking.totalAttempts) * 100) 
+        : 0,
+      lastPrediction: state.patternTracking.lastPrediction,
+      lastVerified: state.patternTracking.lastVerified,
+      recentPredictions: state.patternTracking.predictions.slice(-10)
+    }
   });
 });
 
