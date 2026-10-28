@@ -560,6 +560,53 @@ function classify(n) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// === Directional Number Prediction ===
+// Trace the direction of numbers (0-9) and predict the next number based on that direction
+function predictDirectionalNumber(history) {
+  if (history.length < 3) return null;
+  
+  const last = parseInt(history[history.length - 1].number);
+  const prev = parseInt(history[history.length - 2].number);
+  
+  // Determine direction on number line: 0 1 2 3 4 5 6 7 8 9
+  const diff = last - prev;
+  
+  let direction = 'flat';
+  if (diff > 0) direction = 'ascending';
+  if (diff < 0) direction = 'descending';
+  
+  // Predict next number by continuing the same direction
+  // Example: 9 → 2 (descending by 7), so next would be 2 + 7 = 9 or continuing downward 2 → (2-7+10)%10 = 5
+  // Wrap around on number line 0-9
+  const step = diff;
+  const predictedRaw = last + step;
+  const predictedNumber = ((predictedRaw % 10) + 10) % 10; // Handle negative wrap
+  
+  // Also provide range of likely predictions
+  const possible = [];
+  for (let offset = -1; offset <= 1; offset++) {
+    const n = ((predictedNumber + offset) % 10 + 10) % 10;
+    possible.push({
+      number: n,
+      color: numberToColor(n),
+      classify: classify(n),
+      distance: Math.abs(offset)
+    });
+  }
+  
+  return {
+    prev: prev,
+    last: last,
+    direction: direction,
+    step: Math.abs(diff),
+    predictedNumber: predictedNumber,
+    predictedColor: numberToColor(predictedNumber),
+    predictedClassify: classify(predictedNumber),
+    possible: possible,
+    timestamp: new Date().toISOString()
+  };
+}
+
 // === Race Condition Detection ===
 let lastDetectedIssue = '';
 let raceWindow = false;
@@ -750,7 +797,56 @@ async function startRaceMonitoring() {
           );
         }
         
-        // Update trend history
+        // 🎯 DIRECTIONAL NUMBER PREDICTION tracking
+        // Compare against what the directional pattern predicted
+        if (state.history.length >= 3) {
+          // Get directional prediction based on last 3 history entries BEFORE this result
+          const prediction = predictDirectionalNumber(state.history);
+          
+          if (prediction) {
+            const numberMatch = prediction.predictedNumber === resultNum;
+            const colorMatch = prediction.predictedColor === resultColor;
+            
+            // Track directional accuracy
+            if (!state.directionalTracking) {
+              state.directionalTracking = {
+                totalAttempts: 0,
+                numberMatches: 0,
+                colorMatches: 0,
+                lastPrediction: null,
+                history: []
+              };
+            }
+            
+            state.directionalTracking.totalAttempts++;
+            if (numberMatch) state.directionalTracking.numberMatches++;
+            if (colorMatch) state.directionalTracking.colorMatches++;
+            
+            const accuracy = Math.round(
+              (state.directionalTracking.numberMatches / state.directionalTracking.totalAttempts) * 100
+            );
+            
+            const directionalRecord = {
+              issueNumber: list[0].issueNumber,
+              predictedNumber: prediction.predictedNumber,
+              actualNumber: resultNum,
+              numberMatch: numberMatch,
+              colorMatch: colorMatch,
+              direction: prediction.direction,
+              accuracy: accuracy,
+              timestamp: new Date().toISOString()
+            };
+            
+            state.directionalTracking.lastPrediction = directionalRecord;
+            state.directionalTracking.history.push(directionalRecord);
+            if (state.directionalTracking.history.length > 20) {
+              state.directionalTracking.history.shift();
+            }
+            
+            console.log(`🔢 Directional Prediction: ${prediction.direction} ${prediction.prev}→${prediction.last}→? (predicted: ${prediction.predictedNumber}) | Actual: ${resultNum} | Match: ${numberMatch ? 'YES' : 'NO'} | Accuracy: ${accuracy}%`);
+          }
+        }
+
 
         updateHistory(state.lastResult);
         newResultReceived = true;
@@ -917,21 +1013,35 @@ app.get('/api/status', (req, res) => {
     race_wins: state.raceWins,
     history: state.history.slice(-10),  // Last 10 results for UI
     advancedPrediction: state.advancedPrediction,  // High-accuracy prediction
-    earlyLeaks: state.earlyLeaks.slice(-20),  // Early leaked results before countdown ends
-    // Pattern tracking for "4th round back" prediction accuracy
-    patternTracking: state.patternTracking && {
-      enabled: state.patternTracking.enabled,
-      totalAttempts: state.patternTracking.totalAttempts,
-      wins: state.patternTracking.wins,
-      losses: state.patternTracking.losses,
-      accuracy: state.patternTracking.totalAttempts > 0 
-        ? Math.round((state.patternTracking.wins / state.patternTracking.totalAttempts) * 100) 
-        : 0,
-      lastPrediction: state.patternTracking.lastPrediction,
-      lastVerified: state.patternTracking.lastVerified,
-      recentPredictions: state.patternTracking.predictions.slice(-10)
-    }
-  });
+     earlyLeaks: state.earlyLeaks.slice(-20),  // Early leaked results before countdown ends
+     // Pattern tracking for "4th round back" prediction accuracy
+     patternTracking: state.patternTracking && {
+       enabled: state.patternTracking.enabled,
+       totalAttempts: state.patternTracking.totalAttempts,
+       wins: state.patternTracking.wins,
+       losses: state.patternTracking.losses,
+       accuracy: state.patternTracking.totalAttempts > 0 
+         ? Math.round((state.patternTracking.wins / state.patternTracking.totalAttempts) * 100) 
+         : 0,
+       lastPrediction: state.patternTracking.lastPrediction,
+       lastVerified: state.patternTracking.lastVerified,
+       recentPredictions: state.patternTracking.predictions.slice(-10)
+     },
+     // Directional number prediction tracking
+     directionalTracking: state.directionalTracking || {
+       totalAttempts: 0,
+       numberMatches: 0,
+       colorMatches: 0,
+       numberAccuracy: 0,
+       colorAccuracy: 0,
+       lastPrediction: null,
+       history: []
+     },
+     // Current directional prediction
+     currentDirectionalPrediction: state.history && state.history.length >= 3 
+       ? predictDirectionalNumber(state.history) 
+       : null
+   });
 });
 
 app.get('/api/events', (req, res) => {

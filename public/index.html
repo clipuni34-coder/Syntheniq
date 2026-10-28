@@ -150,6 +150,12 @@
             <div id="patternTrackerContent" class="loading">Waiting for pattern data...</div>
         </div>
 
+        <!-- Directional Number Predictor -->
+        <div class="prediction-box" id="directionalBox" style="border-color: #4a90d9;">
+            <h3>🔢 Directional Number Predictor</h3>
+            <div id="directionalContent" class="loading">Waiting for directional data...</div>
+        </div>
+
         <!-- Race Window Alert -->
         <div class="race-window" id="raceWindowAlert" style="display:none;">
             <h3>⚡ RACE WINDOW DETECTED!</h3>
@@ -261,10 +267,16 @@
                 document.getElementById('earlyLeakContent').innerHTML = 
                     '<p style="text-align: center; color: #888;">Waiting for early leaks...</p>';
             }
-            
             // Update pattern tracker display
+
             if (status.patternTracking) {
                 updatePatternTracker(status.patternTracking);
+            }
+            
+            // Update directional predictor display
+
+            if (status.directionalTracking || status.currentDirectionalPrediction) {
+                updateDirectionalPredictor(status.directionalTracking, status.currentDirectionalPrediction);
             }
         }
         
@@ -402,9 +414,107 @@
             } else {
                 html += '<p style="text-align: center; color: #888; margin-top: 10px;">Waiting for verified round results...</p>';
             }
+            content.innerHTML = html;
+        }
+
+        
+        // Update directional predictor display
+        function updateDirectionalPredictor(tracker, prediction) {
+            const box = document.getElementById('directionalBox');
+            const content = document.getElementById('directionalContent');
+            box.style.display = 'block';
+            
+            const total = tracker?.totalAttempts || 0;
+            const numMatches = tracker?.numberMatches || 0;
+            const colorMatches = tracker?.colorMatches || 0;
+            const numAccuracy = total > 0 ? Math.round((numMatches / total) * 100) : 0;
+            const colorAccuracy = total > 0 ? Math.round((colorMatches / total) * 100) : 0;
+            
+            let html = `
+                <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <div class="card" style="text-align: center;">
+                        <div class="stat-value" style="color: ${numAccuracy >= 20 ? '#00ff88' : numAccuracy >= 10 ? '#ffaa00' : '#ff4444'};">${numAccuracy}%</div>
+                        <div style="color: #888; font-size: 0.85em;">Number Match Rate</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <div class="stat-value" style="color: ${colorAccuracy >= 50 ? '#00ff88' : colorAccuracy >= 30 ? '#ffaa00' : '#ff4444'};">${colorAccuracy}%</div>
+                        <div style="color: #888; font-size: 0.85em;">Color Match Rate</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <div class="stat-value">${total}</div>
+                        <div style="color: #888; font-size: 0.85em;">Attempts</div>
+                    </div>
+                </div>
+            `;
+            
+            // Show current directional prediction
+            if (prediction) {
+                const colorClass = prediction.predictedColor ? prediction.predictedColor.toLowerCase() : '';
+                html += `
+                <div style="margin-top: 15px; padding: 15px; background: #0a0a1a; border-radius: 8px; border: 1px solid #333;">
+                    <div style="font-size: 0.85em; color: #888; margin-bottom: 10px;">Directional Prediction:</div>
+                    <div style="font-size: 1.1em;">
+                        <span style="color: #888;">${prediction.prev || '?'} → </span>
+                        <span style="color: #888;">${prediction.last || '?'} → </span>
+                        <span class="ball ${colorClass}" style="width: 40px; height: 40px; line-height: 40px; font-size: 1.2em;">${prediction.predictedNumber}</span>
+                        <span style="font-size: 1.3em; color: ${colorClass === 'red' ? '#ff4444' : colorClass === 'green' ? '#00ff88' : '#aa55ff'};">
+                            <strong>${prediction.predictedColor} (${prediction.predictedClassify})</strong>
+                        </span>
+                    </div>
+                    <div style="color: #666; margin-top: 8px; font-size: 0.85em;">
+                        Direction: ${prediction.direction} (step: ${prediction.step}) | Number line: 0→9 wrap
+                    </div>
+                </div>
+                `;
+                
+                // Show last verification if available
+                if (tracker?.lastPrediction) {
+                    const lp = tracker.lastPrediction;
+                    const matchColor = lp.numberMatch ? '#00ff88' : '#ff4444';
+                    html += `
+                    <div style="margin-top: 10px; padding: 10px; background: #0a0a1a; border-radius: 8px; border: 1px solid #333;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em;">
+                            <span>Last result: ${lp.predictedNumber} → ${lp.actualNumber} (${lp.numberMatch ? 'MATCH' : 'MISS'})</span>
+                            <span style="color: ${matchColor};">${lp.numberMatch ? '✅' : '❌'}</span>
+                        </div>
+                    </div>
+                    `;
+                }
+            }
+            
+            // Show recent history
+            if (tracker?.history && tracker.history.length > 0) {
+                html += `
+                <table style="margin-top: 15px; font-size: 0.85em;">
+                    <thead>
+                        <tr style="color: #4a90d9;">
+                            <th>Round</th>
+                            <th>Pred</th>
+                            <th>Act</th>
+                            <th>Match</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tracker.history.slice().reverse().map(p => `
+                            <tr>
+                                <td>${p.issueNumber ? p.issueNumber.slice(-4) : '-'}</td>
+                                <td><span class="ball ${p.predictedColor?.toLowerCase()}" style="width: 22px; height: 22px; line-height: 22px; font-size: 0.7em;">${p.predictedNumber}</span></td>
+                                <td><span class="ball ${p.actualColor?.toLowerCase()}" style="width: 22px; height: 22px; line-height: 22px; font-size: 0.7em;">${p.actualNumber}</span></td>
+                                <td style="color: ${p.numberMatch ? '#00ff88' : '#ff4444'};">${p.numberMatch ? '✅' : '❌'}</td>
+                                <td style="font-size: 0.8em; color: #888;">${new Date(p.timestamp).toLocaleTimeString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                `;
+            } else {
+                html += '<p style="text-align: center; color: #888; margin-top: 10px;">Waiting for verified results to calculate accuracy...</p>';
+            }
             
             content.innerHTML = html;
         }
+
         
         // Load trend prediction
         async function loadTrend() {
