@@ -561,28 +561,50 @@ function classify(n) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // === Directional Number Prediction ===
-// Trace the direction of numbers (0-9) and predict the next number based on that direction
+// Trace the direction of numbers (0-9) and predict the next number
+// Example: 4→5 (ascending 1 step), so next prediction = 6 (continue 1 step up)
+// Example: 9→2 (descending with wrap), so next prediction = 1 (continue 1 step down, wrapping through 0)
 function predictDirectionalNumber(history) {
   if (history.length < 3) return null;
   
   const last = parseInt(history[history.length - 1].number);
   const prev = parseInt(history[history.length - 2].number);
   
-  // Determine direction on number line: 0 1 2 3 4 5 6 7 8 9
-  const diff = last - prev;
+  // Calculate distance on a circular number line 0-9
+  // Example: 9→2 = distance 3 (wrapping: 9→0→1→2)
+  // Example: 2→9 = distance 7 (wrapping: 2→3→4→5→6→7→8→9)
+  const directDiff = last - prev;
+  const wrappedDiff = ((last - prev + 10) % 10); // Always positive 0-9
+  const step = Math.min(wrappedDiff, 10 - wrappedDiff); // Shortest distance
   
-  let direction = 'flat';
-  if (diff > 0) direction = 'ascending';
-  if (diff < 0) direction = 'descending';
+  // Determine direction
+  let direction, predictedNumber;
   
-  // Predict next number by continuing the same direction
-  // Example: 9 → 2 (descending by 7), so next would be 2 + 7 = 9 or continuing downward 2 → (2-7+10)%10 = 5
-  // Wrap around on number line 0-9
-  const step = diff;
-  const predictedRaw = last + step;
-  const predictedNumber = ((predictedRaw % 10) + 10) % 10; // Handle negative wrap
+  if (directDiff > 0 && directDiff <= 5) {
+    // Ascending: 4→5, 1→3, 2→8, etc.
+    direction = 'ascending';
+    predictedNumber = (last + step) % 10;
+  } else if (directDiff < 0 && directDiff >= -5) {
+    // Descending: 5→4, 3→1, 8→2, etc.
+    direction = 'descending';
+    predictedNumber = ((last - step) % 10 + 10) % 10;
+  } else if (wrappedDiff > 5) {
+    // Wrapped ascending: e.g., 2→9 (distance 7, shorter as descending 3)
+    direction = 'descending';
+    predictedNumber = ((last - (10 - wrappedDiff)) % 10 + 10) % 10;
+  } else {
+    // Flat or edge case
+    direction = 'flat';
+    predictedNumber = last;
+  }
   
-  // Also provide range of likely predictions
+  // Handle flat case (same number twice)
+  if (last === prev) {
+    direction = 'flat';
+    predictedNumber = last;
+  }
+  
+  // Generate possible predictions (+/- 1 from prediction)
   const possible = [];
   for (let offset = -1; offset <= 1; offset++) {
     const n = ((predictedNumber + offset) % 10 + 10) % 10;
@@ -598,7 +620,7 @@ function predictDirectionalNumber(history) {
     prev: prev,
     last: last,
     direction: direction,
-    step: Math.abs(diff),
+    step: step,
     predictedNumber: predictedNumber,
     predictedColor: numberToColor(predictedNumber),
     predictedClassify: classify(predictedNumber),
